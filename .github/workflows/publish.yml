@@ -1,0 +1,56 @@
+name: Publish NuGet
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish:
+    name: Semantic Version & Publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to push the version tag
+
+    steps:
+      - name: Checkout (full history for versioning)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version and create tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          initial_version: 0.0.1
+          # Commit message prefix conventions:
+          #   feat:  → minor bump
+          #   fix:   → patch bump
+          #   BREAKING CHANGE (footer) or '!' suffix → major bump
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Pack
+        run: >
+          dotnet pack
+          --configuration Release
+          --no-build
+          -p:Version=${{ steps.tag_version.outputs.new_version }}
+          --output ./nupkg
+
+      - name: Push to NuGet
+        run: >
+          dotnet nuget push ./nupkg/*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

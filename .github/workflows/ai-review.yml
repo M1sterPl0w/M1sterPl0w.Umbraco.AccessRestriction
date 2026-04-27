@@ -1,0 +1,31 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+jobs:
+  copilot-review:
+    name: Request Copilot Code Review
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Request GitHub Copilot review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.pulls.requestReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                reviewers: ['github-copilot[bot]'],
+              });
+              core.info('Copilot code review requested successfully.');
+            } catch (error) {
+              // Copilot code review may not be enabled on this repository.
+              // Enable it under Settings → Copilot → Code review.
+              core.warning(`Could not request Copilot review: ${error.message}`);
+            }

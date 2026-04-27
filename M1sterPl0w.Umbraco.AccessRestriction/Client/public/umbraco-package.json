@@ -1,0 +1,25 @@
+{
+  "$schema": "../../umbraco-package-schema.json",
+  "name": "M1sterPl0w.Umbraco.AccessRestriction",
+  "version": "0.1.0",
+  "extensions": [
+    {
+      "type": "dashboard",
+      "alias": "M1sterPl0w.Umbraco.AccessRestriction.Dashboard",
+      "name": "Access Restriction Dashboard",
+      "element": "/App_Plugins/M1sterPl0w.Umbraco.AccessRestriction/access-restriction-dashboard.js",
+      "elementName": "access-restriction-dashboard",
+      "weight": 30,
+      "meta": {
+        "label": "Access Restriction",
+        "pathname": "access-restriction"
+      },
+      "conditions": [
+        {
+          "alias": "Umb.Condition.SectionAlias",
+          "match": "Umb.Section.Content"
+        }
+      ]
+    }
+  ]
+}
