@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Umbraco.Cms" Version="[17.0.0,17.999)" />
+    <PackageVersion Include="Umbraco.Cms.DevelopmentMode.Backoffice" Version="[17.0.0,17.999)" />
+    <PackageVersion Include="Umbraco.Cms.Api.Common" Version="[17.0.0,17.999)" />
+    <PackageVersion Include="Umbraco.Cms.Api.Management" Version="[17.0.0,17.999)" />
+    <PackageVersion Include="Umbraco.Cms.Infrastructure" Version="[17.0.0,17.999)" />
+    <PackageVersion Include="Umbraco.Cms.Web.Common" Version="[17.0.0,17.999)" />
+    <PackageVersion Include="Umbraco.Cms.Web.Website" Version="[17.0.0,17.999)" />
+    <PackageVersion Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" />
+  </ItemGroup>
+</Project>
