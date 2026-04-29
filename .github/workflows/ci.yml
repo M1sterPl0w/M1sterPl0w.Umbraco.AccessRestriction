@@ -17,6 +17,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: M1sterPl0w.Umbraco.AccessRestriction/Client/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: M1sterPl0w.Umbraco.AccessRestriction/Client
+        run: npm ci
+
+      - name: Build frontend (Vite → wwwroot/App_Plugins)
+        working-directory: M1sterPl0w.Umbraco.AccessRestriction/Client
+        run: npm run build
+
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:

@@ -417,9 +417,10 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
-# Vite build output for the package
+# Vite build output for the package (CI rebuilds this from source)
 M1sterPl0w.Umbraco.AccessRestriction/wwwroot/App_Plugins/
 
-# Auto-generated API client files
-**/*.gen.ts
-**/*.gen.js
+# NOTE: *.gen.ts / *.gen.js are intentionally NOT ignored.
+# The generated OpenAPI client must be committed so CI can build
+# without needing a running Umbraco site. Re-run `npm run generate-client`
+# locally whenever C# API controllers change, then commit the result.
