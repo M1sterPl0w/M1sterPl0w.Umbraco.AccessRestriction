@@ -17,7 +17,7 @@ An Umbraco package that restricts access to your site (or specific paths) by IP 
 
 ## Requirements
 
-- Umbraco 13+
+- Umbraco 17+
 - .NET 10
 - Node LTS 20.17.0+ *(for building the frontend)*
 

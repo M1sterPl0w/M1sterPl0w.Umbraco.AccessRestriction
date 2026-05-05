@@ -8,8 +8,15 @@
 
   <PropertyGroup>
     <PackageId>M1sterPl0w.Umbraco.AccessRestriction</PackageId>
+    <Version>0.0.2-preview</Version>
     <Product>M1sterPl0w.Umbraco.AccessRestriction</Product>
-    <Title>M1sterPl0w.Umbraco.AccessRestriction</Title>
+    <Title>M1sterPl0w Umbraco Access Restriction</Title>
+    <Authors>M1sterPl0w</Authors>
+    <Description>An Umbraco package that restricts access to your site (or specific paths) by IP address whitelist. Manage whitelisted IPs and restricted paths from a dashboard in the Umbraco backoffice, with optional hardcoded entries via appsettings.json.</Description>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/M1sterPl0w/M1sterPl0w.Umbraco.AccessRestriction</PackageProjectUrl>
+  
   </PropertyGroup>
 
 
@@ -29,6 +36,10 @@
 
     <!-- However make the Umbraco-package.json included for dotnet pack or nuget package and visible to the solution -->
     <None Include="Client\public\umbraco-package.json" Pack="false" />
+
+    <!-- Include LICENSE and README in the NuGet package -->
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

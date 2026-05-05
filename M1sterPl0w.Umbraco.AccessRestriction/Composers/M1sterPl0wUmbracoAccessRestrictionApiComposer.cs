@@ -47,13 +47,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Composers
                 opt.SwaggerDoc(Constants.ApiName, new OpenApiInfo
                 {
                     Title = "M1sterPl 0wUmbraco Access Restriction Backoffice API",
-                    Version = "1.0",
-                    // Contact = new OpenApiContact
-                    // {
-                    //     Name = "Some Developer",
-                    //     Email = "you@company.com",
-                    //     Url = new Uri("https://company.com")
-                    // }
+                    Version = "1.0"
                 });
 
                 // Enable Umbraco authentication for the "Example" Swagger document

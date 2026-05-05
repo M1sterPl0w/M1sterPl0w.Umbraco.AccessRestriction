@@ -6,7 +6,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Models
     [TableName(AccessRestrictionSettingsSchema.TableName)]
     [PrimaryKey("Key", AutoIncrement = false)]
     [ExplicitColumns]
-    public class AccessRestrictionSettingsSchema
+    public sealed class AccessRestrictionSettingsSchema
     {
         public const string TableName = "AccessRestrictionSettings";
 
@@ -15,11 +15,11 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Models
         [Column("Key")]
         [Length(100)]
         [NullSetting(NullSetting = NullSettings.NotNull)]
-        public string Key { get; set; } = string.Empty;
+        public required string Key { get; init; } = string.Empty;
 
         [Column("Value")]
         [Length(500)]
         [NullSetting(NullSetting = NullSettings.Null)]
-        public string? Value { get; set; }
+        public required string? Value { get; init; }
     }
 }
