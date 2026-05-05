@@ -8,7 +8,6 @@
 
   <PropertyGroup>
     <PackageId>M1sterPl0w.Umbraco.AccessRestriction</PackageId>
-    <Version>0.0.2-preview</Version>
     <Product>M1sterPl0w.Umbraco.AccessRestriction</Product>
     <Title>M1sterPl0w Umbraco Access Restriction</Title>
     <Authors>M1sterPl0w</Authors>
