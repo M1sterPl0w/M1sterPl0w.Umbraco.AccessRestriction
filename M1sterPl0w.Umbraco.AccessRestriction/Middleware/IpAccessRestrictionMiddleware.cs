@@ -46,18 +46,26 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
                 return;
             }
 
-            var clientIp = context.Connection.RemoteIpAddress;
-            if (clientIp is not null)
+            string? clientIpString;
+            if (!string.IsNullOrWhiteSpace(settings.IpHeader))
             {
+                // Read IP from the configured forwarding header; X-Forwarded-For may contain a comma-separated list
+                var headerValue = context.Request.Headers[settings.IpHeader].FirstOrDefault();
+                clientIpString = headerValue?.Split(',')[0].Trim();
+            }
+            else
+            {
+                var remoteIp = context.Connection.RemoteIpAddress;
                 // Normalise IPv4-mapped IPv6 addresses (::ffff:x.x.x.x → x.x.x.x)
-                if (clientIp.IsIPv4MappedToIPv6)
-                    clientIp = clientIp.MapToIPv4();
+                if (remoteIp?.IsIPv4MappedToIPv6 == true)
+                    remoteIp = remoteIp.MapToIPv4();
+                clientIpString = remoteIp?.ToString();
+            }
 
-                if (allowedIps.Any(e => e.IpAddress == clientIp.ToString()))
-                {
-                    await _next(context);
-                    return;
-                }
+            if (!string.IsNullOrEmpty(clientIpString) && allowedIps.Any(e => e.IpAddress == clientIpString))
+            {
+                await _next(context);
+                return;
             }
 
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
