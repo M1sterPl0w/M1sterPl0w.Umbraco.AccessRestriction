@@ -11,6 +11,7 @@ An Umbraco package that restricts access to your site (or specific paths) by IP 
 - **Backoffice dashboard** — manage IPs and paths through a built-in Umbraco dashboard
 - **Static entries via `appsettings.json`** — hardcode IPs and paths that cannot be deleted through the UI
 - **Force-enabled** — if any IPs are configured in `appsettings.json`, the restriction is always active and cannot be disabled from the UI
+- **Custom IP header** — configure which HTTP header to read the client IP from (e.g. `X-Forwarded-For` behind a reverse proxy); defaults to the connection remote IP
 - **IPv4-mapped IPv6** support — `::ffff:x.x.x.x` addresses are automatically normalised
 
 ---
@@ -60,6 +61,22 @@ Add the following section to your `appsettings.json` to hardcode IPs and/or path
 - Entries from `appsettings.json` appear in the dashboard marked **static** and cannot be deleted.
 - If any `IpAddresses` are present, the restriction is **force-enabled** and the toggle in the dashboard is locked.
 
+### IP header (reverse proxy / load balancer)
+
+By default the middleware uses the connection's remote IP address. When your site runs behind a reverse proxy or load balancer that forwards the original client IP in a request header, configure that header name:
+
+**Via the dashboard** — open the *Settings* section and fill in the **IP header** field (e.g. `X-Forwarded-For` or `X-Real-IP`). Leave it empty to fall back to the remote IP.
+
+**Via `appsettings.json`** — set `IpHeader` to enforce the value; it overrides anything saved through the dashboard:
+
+```json
+"AccessRestriction": {
+  "IpHeader": "X-Forwarded-For"
+}
+```
+
+> **Note:** When using `X-Forwarded-For`, only the first (left-most) address in the header is used, as it represents the original client IP.
+
 ---
 
 ## How it works
@@ -70,7 +87,8 @@ The middleware runs on every request and applies the following logic:
 2. **Path check** — if restricted paths are configured, only requests matching those paths are subject to the IP check. Requests to other paths are allowed through.
 3. **No paths configured** — all paths are restricted.
 4. **No IPs configured** — all requests are allowed (restriction is inactive).
-5. **IP check** — if the client IP is in the whitelist, the request is allowed. Otherwise a `403 Forbidden` is returned.
+5. **IP resolution** — if an IP header is configured, the client IP is read from that header (first value for `X-Forwarded-For`-style headers); otherwise the connection remote IP is used.
+6. **IP check** — if the resolved IP is in the whitelist, the request is allowed. Otherwise a `403 Forbidden` is returned.
 
 ---
 

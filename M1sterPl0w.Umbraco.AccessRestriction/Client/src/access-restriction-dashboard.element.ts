@@ -5,6 +5,8 @@ import { umbHttpClient } from '@umbraco-cms/backoffice/http-client';
 interface Settings {
     enabled: boolean;
     isEnabledForced: boolean;
+    ipHeader: string | null;
+    isIpHeaderForced: boolean;
 }
 
 interface AllowedIpAddressEntry {
@@ -29,7 +31,7 @@ const AUTH = [{ scheme: 'bearer', type: 'http' }] as const;
 @customElement('access-restriction-dashboard')
 export default class AccessRestrictionDashboardElement extends UmbLitElement {
     @state() private _entries: AllowedIpAddressEntry[] = [];
-    @state() private _settings: Settings = { enabled: true, isEnabledForced: false };
+    @state() private _settings: Settings = { enabled: true, isEnabledForced: false, ipHeader: null, isIpHeaderForced: false };
     @state() private _settingsSaving = false;
     @state() private _loading = true;
     @state() private _saving = false;
@@ -211,6 +213,7 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
                 <h2>Settings</h2>
                 <div class="settings-form">
                     <label class="toggle-row">
+                        <span>Enable IP whitelisting${this._settings.isEnabledForced ? html` <em class="static-label">static</em>` : ''}</span>
                         <input
                             type="checkbox"
                             .checked=${this._settings.enabled || this._settings.isEnabledForced}
@@ -220,7 +223,19 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
                                 this._settings = { ...this._settings, enabled: (e.target as HTMLInputElement).checked };
                                 this._saveSettings();
                             }}>
-                        <span>Enable IP whitelisting${this._settings.isEnabledForced ? html` <em class="forced-label">(forced by configuration)</em>` : ''}</span>
+                    </label>
+                    <label class="field-row">
+                        <span>IP header${this._settings.isIpHeaderForced ? html` <em class="static-label">static</em>` : ''}</span>
+                        <uui-input
+                            placeholder="e.g. X-Forwarded-For (leave empty to use remote IP)"
+                            .value=${this._settings.ipHeader ?? ''}
+                            ?disabled=${this._settings.isIpHeaderForced}
+                            @input=${(e: Event) => {
+                                if (this._settings.isIpHeaderForced) return;
+                                this._settings = { ...this._settings, ipHeader: (e.target as HTMLInputElement).value || null };
+                            }}
+                            @blur=${() => { if (!this._settings.isIpHeaderForced) this._saveSettings(); }}>
+                        </uui-input>
                     </label>
                     ${this._settingsSaving ? html`<p class="settings-saving">Saving…</p>` : ''}
                 </div>
@@ -534,27 +549,50 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
         }
 
         .settings-form {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+            display: grid;
+            grid-template-columns: max-content 1fr;
+            column-gap: 24px;
+            row-gap: 10px;
+            align-items: center;
+            max-width: 480px;
         }
 
         .toggle-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            display: contents;
             cursor: pointer;
             font-size: 14px;
             color: var(--uui-color-text, #333);
         }
 
+        .toggle-row span {
+            font-size: 14px;
+            color: var(--uui-color-text, #333);
+        }
+
         .toggle-row input[type='checkbox'] {
+            justify-self: start;
             width: 16px;
             height: 16px;
             cursor: pointer;
         }
 
+        .field-row {
+            display: contents;
+            font-size: 14px;
+            color: var(--uui-color-text, #333);
+        }
+
+        .field-row span {
+            font-size: 14px;
+            color: var(--uui-color-text, #333);
+        }
+
+        .field-row uui-input {
+            width: 100%;
+        }
+
         .settings-saving {
+            grid-column: 1 / -1;
             font-size: 13px;
             color: var(--uui-color-text-alt, #888);
             margin: 0;
@@ -565,10 +603,5 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
             color: var(--uui-color-text-alt, #888);
         }
 
-        .forced-label {
-            font-size: 12px;
-            color: var(--uui-color-text-alt, #888);
-            font-style: italic;
-        }
     `];
 }

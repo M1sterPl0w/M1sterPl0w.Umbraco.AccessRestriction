@@ -11,6 +11,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Models
         public const string TableName = "AccessRestrictionSettings";
 
         public const string KeyEnabled = "Enabled";
+        public const string KeyIpHeader = "IpHeader";
 
         [Column("Key")]
         [Length(100)]

@@ -6,6 +6,9 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Models
 
         public List<StaticIpAddressEntry> IpAddresses { get; set; } = [];
         public List<StaticPathEntry> Paths { get; set; } = [];
+
+        /// <summary>When set, the middleware reads the client IP from this HTTP header instead of the connection remote IP. E.g. "X-Forwarded-For" or "X-Real-IP".</summary>
+        public string? IpHeader { get; set; }
     }
 
     public class StaticIpAddressEntry

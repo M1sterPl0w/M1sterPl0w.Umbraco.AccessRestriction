@@ -39,11 +39,19 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
 
         [HttpGet("ipaddresses/mine")]
         [ProducesResponseType<string>(StatusCodes.Status200OK)]
-        public string GetMyIpAddress()
+        public async Task<string> GetMyIpAddress()
         {
-            var ip = HttpContext.Connection.RemoteIpAddress;
-            if (ip?.IsIPv4MappedToIPv6 == true) ip = ip.MapToIPv4();
-            return ip?.ToString() ?? "unknown";
+            var settings = await _settingsRepository.GetAsync();
+            if (!string.IsNullOrWhiteSpace(settings.IpHeader))
+            {
+                var headerValue = HttpContext.Request.Headers[settings.IpHeader].FirstOrDefault();
+                var ip = headerValue?.Split(',')[0].Trim();
+                return string.IsNullOrEmpty(ip) ? "unknown" : ip;
+            }
+
+            var remoteIp = HttpContext.Connection.RemoteIpAddress;
+            if (remoteIp?.IsIPv4MappedToIPv6 == true) remoteIp = remoteIp.MapToIPv4();
+            return remoteIp?.ToString() ?? "unknown";
         }
 
         [HttpPost("ipaddresses")]

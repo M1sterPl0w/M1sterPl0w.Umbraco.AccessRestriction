@@ -36,12 +36,18 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
 
             Upsert(scope, AccessRestrictionSettingsSchema.KeyEnabled, settings.Enabled ? "true" : "false");
 
+            // Only persist IpHeader when it is not forced by appsettings
+            if (string.IsNullOrWhiteSpace(_options.Value.IpHeader))
+                Upsert(scope, AccessRestrictionSettingsSchema.KeyIpHeader, settings.IpHeader ?? string.Empty);
+
             scope.Complete();
-            // Write-through: always recompute IsEnabledForced from options
+            var ipHeaderForced = !string.IsNullOrWhiteSpace(_options.Value.IpHeader);
             var toCache = new SettingsDto
             {
                 Enabled = settings.Enabled,
-                IsEnabledForced = _options.Value.IpAddresses.Count > 0
+                IsEnabledForced = _options.Value.IpAddresses.Count > 0,
+                IpHeader = ipHeaderForced ? _options.Value.IpHeader : settings.IpHeader,
+                IsIpHeaderForced = ipHeaderForced
             };
             _cache.Set(Constants.CacheKeys.Settings, toCache, _cacheOptions);
             return Task.CompletedTask;
@@ -66,11 +72,26 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
             var rows = await scope.Database.FetchAsync<AccessRestrictionSettingsSchema>();
             scope.Complete();
             var lookup = rows.ToDictionary(r => r.Key, r => r.Value, StringComparer.OrdinalIgnoreCase);
+
+            var ipHeaderForced = !string.IsNullOrWhiteSpace(_options.Value.IpHeader);
+            var ipHeader = ipHeaderForced
+                ? _options.Value.IpHeader
+                : ParseString(lookup, AccessRestrictionSettingsSchema.KeyIpHeader);
+
             return new SettingsDto
             {
                 Enabled = ParseBool(lookup, AccessRestrictionSettingsSchema.KeyEnabled, defaultValue: true),
-                IsEnabledForced = _options.Value.IpAddresses.Count > 0
+                IsEnabledForced = _options.Value.IpAddresses.Count > 0,
+                IpHeader = ipHeader,
+                IsIpHeaderForced = ipHeaderForced
             };
+        }
+
+        private static string? ParseString(Dictionary<string, string?> lookup, string key)
+        {
+            if (lookup.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
+                return val;
+            return null;
         }
 
         private static bool ParseBool(Dictionary<string, string?> lookup, string key, bool defaultValue)
