@@ -9,7 +9,7 @@
       "name": "Access Restriction Dashboard",
       "element": "/App_Plugins/M1sterPl0w.Umbraco.AccessRestriction/access-restriction-dashboard.js",
       "elementName": "access-restriction-dashboard",
-      "weight": 30,
+      "weight": -100,
       "meta": {
         "label": "Access Restriction",
         "pathname": "access-restriction"

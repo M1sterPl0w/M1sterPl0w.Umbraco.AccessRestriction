@@ -2,72 +2,99 @@ import { css, html, customElement, state } from '@umbraco-cms/backoffice/externa
 import { UmbLitElement } from '@umbraco-cms/backoffice/lit-element';
 import { umbHttpClient } from '@umbraco-cms/backoffice/http-client';
 
+// ── Types ────────────────────────────────────────────────────────────────────
+
 interface Settings {
     enabled: boolean;
-    isEnabledForced: boolean;
     ipHeader: string | null;
     isIpHeaderForced: boolean;
+    considerRemoteIp: boolean;
 }
 
-interface AllowedIpAddressEntry {
-    ipAddress: string;
-    description: string | null;
-    createdDate: string | null;
-    createdBy: string | null;
+interface Condition {
+    id: number;
+    type: 'Ip' | 'Path' | 'UserGroup';
+    values: string[];
     canDelete: boolean;
 }
 
-interface RestrictedPathEntry {
-    path: string;
+interface AccessRule {
+    id: number;
+    name: string;
     description: string | null;
-    createdDate: string | null;
-    createdBy: string | null;
+    requireAll: boolean;
+    result: 'Allow' | 'Deny';
+    sortOrder: number;
     canDelete: boolean;
+    createdBy: string | null;
+    createdDate: string | null;
+    conditions: Condition[];
 }
 
 const API_BASE = '/umbraco/m1sterpl0wumbracoaccessrestriction/api/v1';
 const AUTH = [{ scheme: 'bearer', type: 'http' }] as const;
 
+const CONDITION_LABELS: Record<string, string> = {
+    Ip: 'IP List',
+    Path: 'Path',
+    UserGroup: 'User Group',
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 @customElement('access-restriction-dashboard')
 export default class AccessRestrictionDashboardElement extends UmbLitElement {
-    @state() private _entries: AllowedIpAddressEntry[] = [];
-    @state() private _settings: Settings = { enabled: true, isEnabledForced: false, ipHeader: null, isIpHeaderForced: false };
-    @state() private _settingsSaving = false;
+    // Data
+    @state() private _settings: Settings = { enabled: true, ipHeader: null, isIpHeaderForced: false, considerRemoteIp: false };
+    @state() private _rules: AccessRule[] = [];
     @state() private _loading = true;
-    @state() private _saving = false;
-    @state() private _showAddForm = false;
-    @state() private _newIp = '';
-    @state() private _newDescription = '';
     @state() private _error = '';
-    @state() private _paths: RestrictedPathEntry[] = [];
-    @state() private _showAddPathForm = false;
-    @state() private _newPath = '';
-    @state() private _newPathDescription = '';
-    @state() private _pathSaving = false;
+
+    // Settings UI
+    @state() private _settingsSaving = false;
+
+    // Rule list UI
+    @state() private _expandedRuleIds = new Set<number>();
+    @state() private _showAddRuleForm = false;
+
+    // Add-rule form
+    @state() private _newRuleName = '';
+    @state() private _newRuleDescription = '';
+    @state() private _newRuleResult: 'Allow' | 'Deny' = 'Allow';
+    @state() private _newRuleRequireAll = true;
+    @state() private _ruleSaving = false;
+
+    // Add-condition form (tracks which rule is being edited)
+    @state() private _addConditionRuleId: number | null = null;
+    @state() private _newConditionType: 'Ip' | 'Path' | 'UserGroup' = 'Ip';
+    @state() private _newConditionValues = '';
+    @state() private _conditionSaving = false;
 
     override connectedCallback() {
         super.connectedCallback();
         this._load();
     }
 
+    // ── Data loading ─────────────────────────────────────────────────────────
+
     private async _load() {
         this._loading = true;
         this._error = '';
         try {
-            const [listRes, settingsRes, pathsRes] = await Promise.all([
-                umbHttpClient.get({ url: `${API_BASE}/ipaddresses`, security: AUTH }),
+            const [settingsRes, rulesRes] = await Promise.all([
                 umbHttpClient.get({ url: `${API_BASE}/settings`, security: AUTH }),
-                umbHttpClient.get({ url: `${API_BASE}/paths`, security: AUTH }),
+                umbHttpClient.get({ url: `${API_BASE}/rules`, security: AUTH }),
             ]);
-            if (listRes.response.ok) this._entries = (listRes.data as AllowedIpAddressEntry[]) ?? [];
             if (settingsRes.response.ok) this._settings = settingsRes.data as Settings;
-            if (pathsRes.response.ok) this._paths = (pathsRes.data as RestrictedPathEntry[]) ?? [];
+            if (rulesRes.response.ok) this._rules = (rulesRes.data as AccessRule[]) ?? [];
         } catch {
             this._error = 'Failed to load data.';
         } finally {
             this._loading = false;
         }
     }
+
+    // ── Settings ─────────────────────────────────────────────────────────────
 
     private async _saveSettings() {
         this._settingsSaving = true;
@@ -85,404 +112,572 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
         }
     }
 
-    private async _addEntry(ip: string, description: string | null): Promise<boolean> {
-        this._saving = true;
+    // ── Rules ─────────────────────────────────────────────────────────────────
+
+    private _toggleRule(id: number) {
+        const next = new Set(this._expandedRuleIds);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        this._expandedRuleIds = next;
+    }
+
+    private async _createRule() {
+        if (!this._newRuleName.trim()) return;
+        this._ruleSaving = true;
         this._error = '';
         try {
             const res = await umbHttpClient.post({
-                url: `${API_BASE}/ipaddresses`,
+                url: `${API_BASE}/rules`,
                 security: AUTH,
-                body: { ipAddress: ip, description },
+                body: {
+                    name: this._newRuleName.trim(),
+                    description: this._newRuleDescription.trim() || null,
+                    result: this._newRuleResult,
+                    requireAll: this._newRuleRequireAll,
+                },
                 headers: { 'Content-Type': 'application/json' },
             });
             if (res.response.status === 201) {
+                this._newRuleName = '';
+                this._newRuleDescription = '';
+                this._newRuleResult = 'Allow';
+                this._newRuleRequireAll = true;
+                this._showAddRuleForm = false;
                 await this._load();
-                return true;
+            } else {
+                this._error = `Failed to create rule (${res.response.status}).`;
             }
-            this._error = res.response.status === 409
-                ? `"${ip}" is already in the list.`
-                : `Failed to add IP (${res.response.status}).`;
         } catch {
-            this._error = 'Failed to add IP address.';
+            this._error = 'Failed to create rule.';
         } finally {
-            this._saving = false;
+            this._ruleSaving = false;
         }
-        return false;
     }
 
-    private async _delete(ip: string) {
+    private async _deleteRule(id: number) {
         this._error = '';
         try {
-            const res = await umbHttpClient.delete({
-                url: `${API_BASE}/ipaddresses/${encodeURIComponent(ip)}`,
-                security: AUTH,
-            });
+            const res = await umbHttpClient.delete({ url: `${API_BASE}/rules/${id}`, security: AUTH });
             if (res.response.ok) {
                 await this._load();
             } else {
-                this._error = `Failed to delete (${res.response.status}).`;
+                this._error = `Failed to delete rule (${res.response.status}).`;
             }
         } catch {
-            this._error = 'Failed to delete IP address.';
+            this._error = 'Failed to delete rule.';
         }
     }
 
-    private async _submitForm() {
-        const ip = this._newIp.trim();
-        if (!ip) return;
-        const ok = await this._addEntry(ip, this._newDescription.trim() || null);
-        if (ok) {
-            this._newIp = '';
-            this._newDescription = '';
-            this._showAddForm = false;
-        }
+    // ── Conditions ────────────────────────────────────────────────────────────
+
+    private _startAddCondition(ruleId: number) {
+        this._addConditionRuleId = ruleId;
+        this._newConditionType = 'Ip';
+        this._newConditionValues = '';
     }
 
-    private async _addPath(path: string, description: string | null): Promise<boolean> {
-        this._pathSaving = true;
+    private _cancelAddCondition() {
+        this._addConditionRuleId = null;
+        this._newConditionValues = '';
+    }
+
+    private _parseValues(raw: string): string[] {
+        return raw
+            .split(/[\n,]+/)
+            .map(v => v.trim())
+            .filter(v => v.length > 0);
+    }
+
+    private async _addCondition(ruleId: number) {
+        const values = this._parseValues(this._newConditionValues);
+        if (values.length === 0) { this._error = 'Enter at least one value.'; return; }
+        this._conditionSaving = true;
         this._error = '';
         try {
-            const normalized = path.startsWith('/') ? path : '/' + path;
             const res = await umbHttpClient.post({
-                url: `${API_BASE}/paths`,
+                url: `${API_BASE}/rules/${ruleId}/conditions`,
                 security: AUTH,
-                body: { path: normalized, description },
+                body: { type: this._newConditionType, values },
                 headers: { 'Content-Type': 'application/json' },
             });
             if (res.response.status === 201) {
+                this._addConditionRuleId = null;
+                this._newConditionValues = '';
                 await this._load();
-                return true;
+            } else {
+                this._error = `Failed to add condition (${res.response.status}).`;
             }
-            this._error = res.response.status === 409
-                ? `"${normalized}" is already in the list.`
-                : `Failed to add path (${res.response.status}).`;
         } catch {
-            this._error = 'Failed to add path.';
+            this._error = 'Failed to add condition.';
         } finally {
-            this._pathSaving = false;
+            this._conditionSaving = false;
         }
-        return false;
     }
 
-    private async _deletePath(path: string) {
+    private async _deleteCondition(conditionId: number) {
         this._error = '';
         try {
-            const encoded = encodeURIComponent(path.replace(/^\//, ''));
-            const res = await umbHttpClient.delete({
-                url: `${API_BASE}/paths/${encoded}`,
-                security: AUTH,
-            });
+            const res = await umbHttpClient.delete({ url: `${API_BASE}/conditions/${conditionId}`, security: AUTH });
             if (res.response.ok) {
                 await this._load();
             } else {
-                this._error = `Failed to delete path (${res.response.status}).`;
+                this._error = `Failed to delete condition (${res.response.status}).`;
             }
         } catch {
-            this._error = 'Failed to delete path.';
+            this._error = 'Failed to delete condition.';
         }
     }
 
-    private async _submitPathForm() {
-        const path = this._newPath.trim();
-        if (!path) return;
-        const ok = await this._addPath(path, this._newPathDescription.trim() || null);
-        if (ok) {
-            this._newPath = '';
-            this._newPathDescription = '';
-            this._showAddPathForm = false;
-        }
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private _formatDate(d: string | null) {
+        if (!d) return '';
+        try { return new Date(d).toLocaleDateString(); } catch { return d; }
     }
 
-    private _onPathKeyDown(e: KeyboardEvent) {
-        if (e.key === 'Enter') this._submitPathForm();
-    }
-
-    private _onKeyDown(e: KeyboardEvent) {
-        if (e.key === 'Enter') this._submitForm();
-    }
-
-    private _formatDate(dateStr: string | null): string {
-        if (!dateStr) return '';
-        try { return new Date(dateStr).toLocaleDateString(); } catch { return dateStr; }
-    }
+    // ── Render ────────────────────────────────────────────────────────────────
 
     override render() {
         return html`
-            <!-- Settings section -->
-            <div class="settings-section">
+            ${this._renderSettings()}
+            ${this._renderRules()}
+        `;
+    }
+
+    private _renderSettings() {
+        return html`
+            <div class="section">
                 <h2>Settings</h2>
-                <div class="settings-form">
-                    <label class="toggle-row">
-                        <span>Enable IP whitelisting${this._settings.isEnabledForced ? html` <em class="static-label">static</em>` : ''}</span>
-                        <input
-                            type="checkbox"
-                            .checked=${this._settings.enabled || this._settings.isEnabledForced}
-                            ?disabled=${this._settings.isEnabledForced}
-                            @change=${(e: Event) => {
-                                if (this._settings.isEnabledForced) return;
-                                this._settings = { ...this._settings, enabled: (e.target as HTMLInputElement).checked };
-                                this._saveSettings();
-                            }}>
-                    </label>
-                    <label class="field-row">
-                        <span>IP header${this._settings.isIpHeaderForced ? html` <em class="static-label">static</em>` : ''}</span>
-                        <uui-input
-                            placeholder="e.g. X-Forwarded-For (leave empty to use remote IP)"
-                            .value=${this._settings.ipHeader ?? ''}
-                            ?disabled=${this._settings.isIpHeaderForced}
-                            @input=${(e: Event) => {
-                                if (this._settings.isIpHeaderForced) return;
-                                this._settings = { ...this._settings, ipHeader: (e.target as HTMLInputElement).value || null };
-                            }}
-                            @blur=${() => { if (!this._settings.isIpHeaderForced) this._saveSettings(); }}>
-                        </uui-input>
-                    </label>
-                    ${this._settingsSaving ? html`<p class="settings-saving">Saving…</p>` : ''}
+                <div class="settings-grid">
+                    <span class="settings-label">Enable access restriction</span>
+                    <uui-toggle
+                        .checked=${this._settings.enabled}
+                        @change=${(e: Event) => {
+                            this._settings = { ...this._settings, enabled: (e.target as HTMLInputElement).checked };
+                            this._saveSettings();
+                        }}>
+                    </uui-toggle>
+
+                    <span class="settings-label">
+                        IP header${this._settings.isIpHeaderForced ? html` <em class="static-label">static</em>` : ''}
+                    </span>
+                    <uui-input
+                        placeholder="e.g. X-Forwarded-For"
+                        .value=${this._settings.ipHeader ?? ''}
+                        ?disabled=${this._settings.isIpHeaderForced}
+                        @input=${(e: Event) => {
+                            if (this._settings.isIpHeaderForced) return;
+                            this._settings = { ...this._settings, ipHeader: (e.target as HTMLInputElement).value || null };
+                        }}
+                        @blur=${() => { if (!this._settings.isIpHeaderForced) this._saveSettings(); }}>
+                    </uui-input>
+
+                    ${this._settingsSaving ? html`<span class="settings-saving" style="grid-column: 1/-1">Saving…</span>` : ''}
+
+                    <span class="settings-label">Also consider direct IP</span>
+                    <uui-toggle
+                        .checked=${this._settings.considerRemoteIp}
+                        @change=${(e: Event) => {
+                            this._settings = { ...this._settings, considerRemoteIp: (e.target as HTMLInputElement).checked };
+                            this._saveSettings();
+                        }}>
+                    </uui-toggle>
                 </div>
             </div>
+        `;
+    }
 
-            <!-- Restricted Paths section -->
-            <div class="module-section">
-                <h2>Restricted Paths</h2>
-                <p class="module-description">When no paths are configured, all paths are blocked for non-whitelisted IP addresses. Add specific paths to limit restrictions to those paths only — e.g. <code>/umbraco</code> blocks everything under it, while <code>/umbraco/settings</code> blocks only that sub-path.</p>
-
-                <div class="toolbar">
-                    <uui-button look="primary" label="Add path" @click=${() => { this._showAddPathForm = !this._showAddPathForm; this._error = ''; }}>
-                        <uui-icon name="icon-add"></uui-icon>
+    private _renderRules() {
+        return html`
+            <div class="section">
+                <div class="section-header">
+                    <div>
+                        <h2>Access Rules</h2>
+                        <p class="description">
+                            Rules are evaluated in order. The first matching rule wins.
+                            If no rule matches, access is <strong>allowed</strong>.
+                            A rule with no conditions is skipped.
+                        </p>
+                    </div>
+                    <uui-button look="primary" @click=${() => { this._showAddRuleForm = !this._showAddRuleForm; this._error = ''; }}>
+                        <uui-icon name="icon-add"></uui-icon> Add rule
                     </uui-button>
                 </div>
 
-                ${this._showAddPathForm ? html`
-                    <div class="add-form">
-                        <div class="form-row">
-                            <div class="form-field">
-                                <label>Path *</label>
-                                <uui-input
-                                    placeholder="e.g. /umbraco"
-                                    .value=${this._newPath}
-                                    @input=${(e: Event) => (this._newPath = (e.target as HTMLInputElement).value)}
-                                    @keydown=${this._onPathKeyDown}>
-                                </uui-input>
-                            </div>
-                            <div class="form-field">
-                                <label>Description</label>
-                                <uui-input
-                                    placeholder="Optional description"
-                                    .value=${this._newPathDescription}
-                                    @input=${(e: Event) => (this._newPathDescription = (e.target as HTMLInputElement).value)}
-                                    @keydown=${this._onPathKeyDown}>
-                                </uui-input>
-                            </div>
-                            <div class="form-actions">
-                                <uui-button
-                                    look="primary"
-                                    ?disabled=${this._pathSaving || !this._newPath.trim()}
-                                    @click=${this._submitPathForm}>
-                                    ${this._pathSaving ? 'Saving…' : 'Save'}
-                                </uui-button>
-                                <uui-button @click=${() => { this._showAddPathForm = false; this._error = ''; }}>
-                                    Cancel
-                                </uui-button>
-                            </div>
-                        </div>
-                    </div>
-                ` : ''}
-
+                ${this._showAddRuleForm ? this._renderAddRuleForm() : ''}
                 ${this._error ? html`<p class="error-msg">${this._error}</p>` : ''}
 
-                ${this._loading ? html`<p>Loading…</p>` : html`
-                    <uui-table>
-                        <uui-table-head>
-                            <uui-table-head-cell>Path</uui-table-head-cell>
-                            <uui-table-head-cell>Description</uui-table-head-cell>
-                            <uui-table-head-cell>Created</uui-table-head-cell>
-                            <uui-table-head-cell>Created By</uui-table-head-cell>
-                            <uui-table-head-cell></uui-table-head-cell>
-                        </uui-table-head>
-
-                        ${this._paths.length === 0 ? html`
-                            <uui-table-row>
-                                <uui-table-cell>
-                                    <em class="empty-text">No restricted paths configured — all paths are blocked for non-whitelisted IP addresses.</em>
-                                </uui-table-cell>
-                                <uui-table-cell></uui-table-cell>
-                                <uui-table-cell></uui-table-cell>
-                                <uui-table-cell></uui-table-cell>
-                                <uui-table-cell></uui-table-cell>
-                            </uui-table-row>
-                        ` : this._paths.map(p => html`
-                            <uui-table-row>
-                                <uui-table-cell class="cell-mono">${p.path}</uui-table-cell>
-                                <uui-table-cell>${p.description ?? ''}</uui-table-cell>
-                                <uui-table-cell>${this._formatDate(p.createdDate)}</uui-table-cell>
-                                <uui-table-cell>${p.createdBy ?? ''}</uui-table-cell>
-                                <uui-table-cell>
-                                    ${p.canDelete ? html`
-                                        <uui-button
-                                            color="danger"
-                                            look="primary"
-                                            label="Delete"
-                                            @click=${() => this._deletePath(p.path)}>
-                                            <uui-icon name="icon-trash"></uui-icon>
-                                        </uui-button>
-                                    ` : html`<em class="static-label">static</em>`}
-                                </uui-table-cell>
-                            </uui-table-row>
-                        `)}
-                    </uui-table>
-                `}
+                ${this._loading
+                    ? html`<p>Loading…</p>`
+                    : this._rules.length === 0
+                        ? html`<p class="empty">No rules configured — all requests are currently allowed.</p>`
+                        : this._rules.map(r => this._renderRuleCard(r))
+                }
             </div>
-
-            <h2>Whitelisted IP Addresses</h2>
-
-            <!-- Toolbar -->
-            <div class="toolbar">
-                <uui-button look="primary" label="Add IP address" @click=${() => { this._showAddForm = !this._showAddForm; this._error = ''; }}>
-                    <uui-icon name="icon-add"></uui-icon>
-                </uui-button>
-            </div>
-
-            <!-- Inline add form -->
-            ${this._showAddForm ? html`
-                <div class="add-form">
-                    <div class="form-row">
-                        <div class="form-field">
-                            <label>IP Address *</label>
-                            <uui-input
-                                placeholder="e.g. 192.168.1.1"
-                                .value=${this._newIp}
-                                @input=${(e: Event) => (this._newIp = (e.target as HTMLInputElement).value)}
-                                @keydown=${this._onKeyDown}>
-                            </uui-input>
-                        </div>
-                        <div class="form-field">
-                            <label>Description</label>
-                            <uui-input
-                                placeholder="Optional description"
-                                .value=${this._newDescription}
-                                @input=${(e: Event) => (this._newDescription = (e.target as HTMLInputElement).value)}
-                                @keydown=${this._onKeyDown}>
-                            </uui-input>
-                        </div>
-                        <div class="form-actions">
-                            <uui-button
-                                look="primary"
-                                ?disabled=${this._saving || !this._newIp.trim()}
-                                @click=${this._submitForm}>
-                                ${this._saving ? 'Saving…' : 'Save'}
-                            </uui-button>
-                            <uui-button @click=${() => { this._showAddForm = false; this._error = ''; }}>
-                                Cancel
-                            </uui-button>
-                        </div>
-                    </div>
-                </div>
-            ` : ''}
-
-            ${this._error ? html`<p class="error-msg">${this._error}</p>` : ''}
-
-            ${this._loading ? html`<p>Loading…</p>` : html`
-                <uui-table>
-                    <uui-table-head>
-                        <uui-table-head-cell>IP address</uui-table-head-cell>
-                        <uui-table-head-cell>Description</uui-table-head-cell>
-                        <uui-table-head-cell>Created</uui-table-head-cell>
-                        <uui-table-head-cell>Created By</uui-table-head-cell>
-                        <uui-table-head-cell></uui-table-head-cell>
-                    </uui-table-head>
-
-                    ${this._entries.length === 0 ? html`
-                        <uui-table-row>
-                            <uui-table-cell>
-                                <em class="empty-text">No IP addresses configured — all visitors are currently allowed.</em>
-                            </uui-table-cell>
-                            <uui-table-cell></uui-table-cell>
-                            <uui-table-cell></uui-table-cell>
-                            <uui-table-cell></uui-table-cell>
-                            <uui-table-cell></uui-table-cell>
-                        </uui-table-row>
-                    ` : this._entries.map(e => html`
-                        <uui-table-row>
-                            <uui-table-cell class="cell-mono">${e.ipAddress}</uui-table-cell>
-                            <uui-table-cell>${e.description ?? ''}</uui-table-cell>
-                            <uui-table-cell>${this._formatDate(e.createdDate)}</uui-table-cell>
-                            <uui-table-cell>${e.createdBy ?? ''}</uui-table-cell>
-                            <uui-table-cell>
-                                ${e.canDelete ? html`
-                                    <uui-button
-                                        color="danger"
-                                        look="primary"
-                                        label="Delete"
-                                        @click=${() => this._delete(e.ipAddress)}>
-                                        <uui-icon name="icon-trash"></uui-icon>
-                                    </uui-button>
-                                ` : html`<em class="static-label">static</em>`}
-                            </uui-table-cell>
-                        </uui-table-row>
-                    `)}
-                </uui-table>
-            `}
         `;
     }
+
+    private _renderAddRuleForm() {
+        return html`
+            <div class="card form-card">
+                <h3>New Rule</h3>
+                <div class="form-grid">
+                    <label>Name *</label>
+                    <uui-input
+                        placeholder="e.g. Block public API"
+                        .value=${this._newRuleName}
+                        @input=${(e: Event) => (this._newRuleName = (e.target as HTMLInputElement).value)}>
+                    </uui-input>
+
+                    <label>Description</label>
+                    <uui-input
+                        placeholder="Optional"
+                        .value=${this._newRuleDescription}
+                        @input=${(e: Event) => (this._newRuleDescription = (e.target as HTMLInputElement).value)}>
+                    </uui-input>
+
+                    <label>Result</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="result" value="Allow"
+                                .checked=${this._newRuleResult === 'Allow'}
+                                @change=${() => (this._newRuleResult = 'Allow')}>
+                            <span class="badge allow">Allow</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="result" value="Deny"
+                                .checked=${this._newRuleResult === 'Deny'}
+                                @change=${() => (this._newRuleResult = 'Deny')}>
+                            <span class="badge deny">Deny</span>
+                        </label>
+                    </div>
+
+                    <label>Match</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="match"
+                                .checked=${this._newRuleRequireAll}
+                                @change=${() => (this._newRuleRequireAll = true)}>
+                            ALL conditions (AND)
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="match"
+                                .checked=${!this._newRuleRequireAll}
+                                @change=${() => (this._newRuleRequireAll = false)}>
+                            ANY condition (OR)
+                        </label>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <uui-button look="primary"
+                        ?disabled=${this._ruleSaving || !this._newRuleName.trim()}
+                        @click=${this._createRule}>
+                        ${this._ruleSaving ? 'Saving…' : 'Save rule'}
+                    </uui-button>
+                    <uui-button @click=${() => { this._showAddRuleForm = false; this._error = ''; }}>
+                        Cancel
+                    </uui-button>
+                </div>
+            </div>
+        `;
+    }
+
+    private _renderRuleCard(rule: AccessRule) {
+        const expanded = this._expandedRuleIds.has(rule.id);
+        return html`
+            <div class="card rule-card">
+                <div class="rule-header" @click=${() => this._toggleRule(rule.id)}>
+                    <span class="badge ${rule.result === 'Allow' ? 'allow' : 'deny'}">${rule.result}</span>
+                    <span class="rule-name">${rule.name}</span>
+                    <span class="rule-meta">${rule.requireAll ? 'ALL' : 'ANY'} &middot; ${rule.conditions.length} condition${rule.conditions.length !== 1 ? 's' : ''}</span>
+                    ${!rule.canDelete ? html`<em class="static-label">static</em>` : ''}
+                    ${rule.createdDate ? html`<span class="rule-meta">${this._formatDate(rule.createdDate)}</span>` : ''}
+                    <uui-icon class="chevron" name="${expanded ? 'icon-arrow-up' : 'icon-arrow-down'}"></uui-icon>
+                </div>
+
+                ${expanded ? html`
+                    <div class="rule-body">
+                        ${rule.description ? html`<p class="rule-desc">${rule.description}</p>` : ''}
+
+                        <div class="conditions-list">
+                            ${rule.conditions.length === 0
+                                ? html`<p class="empty-conditions">No conditions — add one below to make this rule match something.</p>`
+                                : rule.conditions.map(c => this._renderCondition(c, rule.canDelete))
+                            }
+                        </div>
+
+                        ${rule.canDelete && this._addConditionRuleId !== rule.id ? html`
+                            <uui-button @click=${() => this._startAddCondition(rule.id)}>
+                                <uui-icon name="icon-add"></uui-icon> Add condition
+                            </uui-button>
+                        ` : ''}
+
+                        ${this._addConditionRuleId === rule.id ? this._renderAddConditionForm(rule.id) : ''}
+
+                        ${rule.canDelete ? html`
+                            <div class="rule-footer">
+                                <uui-button color="danger" look="outline"
+                                    @click=${() => this._deleteRule(rule.id)}>
+                                    <uui-icon name="icon-trash"></uui-icon> Delete rule
+                                </uui-button>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    private _renderCondition(condition: Condition, ruleCanDelete: boolean) {
+        return html`
+            <div class="condition-row">
+                <span class="condition-type-badge">${CONDITION_LABELS[condition.type] ?? condition.type}</span>
+                <div class="condition-values">
+                    ${condition.values.map(v => html`<code class="value-chip">${v}</code>`)}
+                </div>
+                ${ruleCanDelete && condition.canDelete ? html`
+                    <uui-button color="danger" look="outline" compact
+                        @click=${() => this._deleteCondition(condition.id)}>
+                        <uui-icon name="icon-trash"></uui-icon>
+                    </uui-button>
+                ` : html`<em class="static-label">static</em>`}
+            </div>
+        `;
+    }
+
+    private _renderAddConditionForm(ruleId: number) {
+        const placeholder = {
+            Ip:        'e.g. 192.168.1.1\n10.0.0.0/8  (IPv4 or IPv6)',
+            Path:      'e.g. /umbraco\n/api/private',
+            UserGroup: 'e.g. Admin\nEditor',
+        }[this._newConditionType];
+
+        return html`
+            <div class="add-condition-form">
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>Type</label>
+                        <select
+                            .value=${this._newConditionType}
+                            @change=${(e: Event) => (this._newConditionType = (e.target as HTMLSelectElement).value as 'Ip' | 'Path' | 'UserGroup')}>
+                            <option value="Ip">IP List</option>
+                            <option value="Path">Path</option>
+                            <option value="UserGroup">User Group</option>
+                        </select>
+                    </div>
+                    <div class="form-field flex-grow">
+                        <label>Values <em class="hint">(one per line or comma-separated)</em></label>
+                        <textarea
+                            rows="3"
+                            placeholder=${placeholder}
+                            .value=${this._newConditionValues}
+                            @input=${(e: Event) => (this._newConditionValues = (e.target as HTMLTextAreaElement).value)}>
+                        </textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <uui-button look="primary"
+                        ?disabled=${this._conditionSaving || !this._newConditionValues.trim()}
+                        @click=${() => this._addCondition(ruleId)}>
+                        ${this._conditionSaving ? 'Saving…' : 'Add condition'}
+                    </uui-button>
+                    <uui-button @click=${this._cancelAddCondition}>Cancel</uui-button>
+                </div>
+            </div>
+        `;
+    }
+
+    // ── Styles ────────────────────────────────────────────────────────────────
 
     static override readonly styles = [css`
         :host {
             display: block;
             padding: 24px;
+            max-width: 900px;
         }
 
-        .toolbar {
+        h2 {
+            margin: 0 0 8px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        h3 {
+            margin: 0 0 16px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding-bottom: 32px;
+            border-bottom: 1px solid var(--uui-color-border, #e0e0e0);
+        }
+
+        .section-header {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
-            margin-bottom: 16px;
+            gap: 16px;
+            margin-bottom: 8px;
         }
 
-        .ip-status {
+        .description {
+            font-size: 13px;
+            color: var(--uui-color-text-alt, #888);
+            margin: 0 0 20px;
+        }
+
+        /* ── Settings grid ── */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            column-gap: 20px;
+            row-gap: 14px;
+            align-items: center;
+            max-width: 420px;
+        }
+
+        .settings-label {
+            font-size: 14px;
+            color: var(--uui-color-text, #333);
+            white-space: nowrap;
+        }
+
+        .settings-saving {
+            font-size: 13px;
+            color: var(--uui-color-text-alt, #888);
+        }
+
+        /* ── Cards ── */
+        .card {
+            border: 1px solid var(--uui-color-border, #e0e0e0);
+            border-radius: 6px;
+            margin-bottom: 12px;
+            background: var(--uui-color-surface, #fff);
+            overflow: hidden;
+        }
+
+        .form-card {
+            padding: 20px;
+        }
+
+        /* ── Rule card ── */
+        .rule-header {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            padding: 14px 16px;
+            cursor: pointer;
+            user-select: none;
+            flex-wrap: wrap;
         }
 
-        .status-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            font-size: 11px;
-            font-weight: bold;
+        .rule-header:hover {
+            background: var(--uui-color-surface-alt, #f5f5f5);
+        }
+
+        .rule-name {
+            font-weight: 600;
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .rule-meta {
+            font-size: 12px;
+            color: var(--uui-color-text-alt, #888);
+        }
+
+        .chevron {
+            margin-left: auto;
             flex-shrink: 0;
         }
 
-        .status-icon.danger {
-            background: #e74c3c;
-            color: white;
+        .rule-body {
+            padding: 0 16px 16px;
+            border-top: 1px solid var(--uui-color-border, #e0e0e0);
+            padding-top: 12px;
         }
 
-        .status-icon.ok {
-            background: #27ae60;
-            color: white;
+        .rule-desc {
+            font-size: 13px;
+            color: var(--uui-color-text-alt, #888);
+            margin: 0 0 12px;
         }
 
-        .status-text {
-            font-size: 14px;
-            color: var(--uui-color-text, #333);
+        .rule-footer {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--uui-color-border, #e0e0e0);
         }
 
-        .add-form {
+        /* ── Conditions ── */
+        .conditions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .condition-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 10px;
+            background: var(--uui-color-surface-alt, #f9f9f9);
+            border-radius: 4px;
+            flex-wrap: wrap;
+        }
+
+        .condition-type-badge {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: var(--uui-color-current, #1b264f);
+            color: #fff;
+            border-radius: 3px;
+            padding: 2px 6px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .condition-values {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            flex: 1;
+        }
+
+        .value-chip {
+            font-family: monospace;
+            font-size: 12px;
             background: var(--uui-color-surface, #fff);
+            border: 1px solid var(--uui-color-border, #ddd);
+            border-radius: 3px;
+            padding: 1px 6px;
+        }
+
+        .empty-conditions {
+            font-size: 13px;
+            color: var(--uui-color-text-alt, #888);
+            margin: 0;
+        }
+
+        /* ── Add condition form ── */
+        .add-condition-form {
+            background: var(--uui-color-surface-alt, #f5f5f5);
             border: 1px solid var(--uui-color-border, #e0e0e0);
             border-radius: 4px;
-            padding: 16px;
-            margin-bottom: 16px;
+            padding: 14px;
+            margin-top: 10px;
+            margin-bottom: 10px;
         }
 
         .form-row {
             display: flex;
-            gap: 16px;
-            align-items: flex-end;
+            gap: 14px;
+            align-items: flex-start;
             flex-wrap: wrap;
         }
 
@@ -490,11 +685,58 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
             display: flex;
             flex-direction: column;
             gap: 4px;
+        }
+
+        .form-field.flex-grow {
             flex: 1;
-            min-width: 160px;
+            min-width: 200px;
         }
 
         .form-field label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--uui-color-text, #333);
+        }
+
+        .hint {
+            font-weight: 400;
+            font-style: italic;
+            color: var(--uui-color-text-alt, #888);
+        }
+
+        .form-field select {
+            height: 36px;
+            padding: 0 8px;
+            border: 1px solid var(--uui-color-border, #ccc);
+            border-radius: 4px;
+            font-size: 14px;
+            background: var(--uui-color-surface, #fff);
+        }
+
+        .form-field textarea {
+            padding: 6px 8px;
+            border: 1px solid var(--uui-color-border, #ccc);
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+            resize: vertical;
+            background: var(--uui-color-surface, #fff);
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* ── Add rule form ── */
+        .form-grid {
+            display: grid;
+            grid-template-columns: max-content 1fr;
+            column-gap: 20px;
+            row-gap: 12px;
+            align-items: center;
+            max-width: 560px;
+            margin-bottom: 16px;
+        }
+
+        .form-grid label {
             font-size: 13px;
             font-weight: 500;
             color: var(--uui-color-text, #333);
@@ -504,104 +746,62 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
             display: flex;
             gap: 8px;
             align-items: center;
+            margin-top: 8px;
         }
 
-        .error-msg {
-            color: var(--uui-color-danger, #e74c3c);
-            font-size: 13px;
-            margin: 0 0 12px;
+        /* ── Badges ── */
+        .badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-radius: 3px;
+            padding: 2px 7px;
+            flex-shrink: 0;
         }
 
-        h2 {
-            margin: 0 0 16px;
-            font-size: 18px;
-            font-weight: 600;
+        .badge.allow {
+            background: #d4edda;
+            color: #155724;
         }
 
-        uui-table {
-            width: 100%;
+        .badge.deny {
+            background: #f8d7da;
+            color: #721c24;
         }
 
-        .cell-mono {
-            font-family: monospace;
+        /* ── Radio group ── */
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
         }
 
-        .empty-text {
-            color: var(--uui-color-text-alt, #888);
-        }
-
-        .settings-section {
-            margin-bottom: 32px;
-            padding-bottom: 24px;
-            border-bottom: 1px solid var(--uui-color-border, #e0e0e0);
-        }
-
-        .module-section {
-            margin-bottom: 32px;
-            padding-bottom: 24px;
-            border-bottom: 1px solid var(--uui-color-border, #e0e0e0);
-        }
-
-        .module-description {
-            font-size: 13px;
-            color: var(--uui-color-text-alt, #888);
-            margin: 0 0 16px;
-        }
-
-        .settings-form {
-            display: grid;
-            grid-template-columns: max-content 1fr;
-            column-gap: 24px;
-            row-gap: 10px;
+        .radio-label {
+            display: flex;
             align-items: center;
-            max-width: 480px;
-        }
-
-        .toggle-row {
-            display: contents;
-            cursor: pointer;
+            gap: 6px;
             font-size: 14px;
-            color: var(--uui-color-text, #333);
-        }
-
-        .toggle-row span {
-            font-size: 14px;
-            color: var(--uui-color-text, #333);
-        }
-
-        .toggle-row input[type='checkbox'] {
-            justify-self: start;
-            width: 16px;
-            height: 16px;
             cursor: pointer;
         }
 
-        .field-row {
-            display: contents;
-            font-size: 14px;
-            color: var(--uui-color-text, #333);
-        }
-
-        .field-row span {
-            font-size: 14px;
-            color: var(--uui-color-text, #333);
-        }
-
-        .field-row uui-input {
-            width: 100%;
-        }
-
-        .settings-saving {
-            grid-column: 1 / -1;
-            font-size: 13px;
-            color: var(--uui-color-text-alt, #888);
-            margin: 0;
-        }
-
+        /* ── Misc ── */
         .static-label {
             font-size: 12px;
             color: var(--uui-color-text-alt, #888);
         }
 
+        .error-msg {
+            color: var(--uui-color-danger, #e74c3c);
+            font-size: 13px;
+            margin: 8px 0;
+        }
+
+        .empty {
+            font-size: 14px;
+            color: var(--uui-color-text-alt, #888);
+        }
     `];
 }
+

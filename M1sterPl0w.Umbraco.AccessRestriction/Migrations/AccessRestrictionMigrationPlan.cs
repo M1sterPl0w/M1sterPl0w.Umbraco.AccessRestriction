@@ -7,7 +7,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Migrations
         public AccessRestrictionMigrationPlan() : base("AccessRestriction")
         {
             From(string.Empty)
-                .To<InitialMigration>("initial-v1");
+                .To<InitialMigration>("1.0");
         }
     }
 }

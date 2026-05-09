@@ -40,30 +40,31 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
             if (string.IsNullOrWhiteSpace(_options.Value.IpHeader))
                 Upsert(scope, AccessRestrictionSettingsSchema.KeyIpHeader, settings.IpHeader ?? string.Empty);
 
+            Upsert(scope, AccessRestrictionSettingsSchema.KeyConsiderRemoteIp, settings.ConsiderRemoteIp ? "true" : "false");
+
             scope.Complete();
+
             var ipHeaderForced = !string.IsNullOrWhiteSpace(_options.Value.IpHeader);
-            var toCache = new SettingsDto
+            _cache.Set(Constants.CacheKeys.Settings, new SettingsDto
             {
-                Enabled = settings.Enabled,
-                IsEnabledForced = _options.Value.IpAddresses.Count > 0,
-                IpHeader = ipHeaderForced ? _options.Value.IpHeader : settings.IpHeader,
-                IsIpHeaderForced = ipHeaderForced
-            };
-            _cache.Set(Constants.CacheKeys.Settings, toCache, _cacheOptions);
+                Enabled          = settings.Enabled,
+                IpHeader         = ipHeaderForced ? _options.Value.IpHeader : settings.IpHeader,
+                IsIpHeaderForced = ipHeaderForced,
+                ConsiderRemoteIp = settings.ConsiderRemoteIp
+            }, _cacheOptions);
             return Task.CompletedTask;
         }
 
         private static void Upsert(IScope scope, string key, string value)
         {
-            var exists = scope.Database.ExecuteScalar<int>(
-                $"SELECT COUNT(1) FROM \"{AccessRestrictionSettingsSchema.TableName}\" WHERE \"Key\" = @0", key) > 0;
-
+            var entity = new AccessRestrictionSettingsSchema { Key = key, Value = value };
+            // Fetch all rows (max ~3) and check in memory — avoids raw SQL quoting issues across databases
+            var exists = scope.Database.Fetch<AccessRestrictionSettingsSchema>()
+                .Any(r => string.Equals(r.Key, key, StringComparison.OrdinalIgnoreCase));
             if (exists)
-                scope.Database.Execute(
-                    $"UPDATE \"{AccessRestrictionSettingsSchema.TableName}\" SET \"Value\" = @0 WHERE \"Key\" = @1", value, key);
+                scope.Database.Update(entity);
             else
-                scope.Database.Execute(
-                    $"INSERT INTO \"{AccessRestrictionSettingsSchema.TableName}\" (\"Key\", \"Value\") VALUES (@0, @1)", key, value);
+                scope.Database.Insert(entity);
         }
 
         private async Task<SettingsDto> FetchFromDbAsync()
@@ -80,10 +81,10 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
 
             return new SettingsDto
             {
-                Enabled = ParseBool(lookup, AccessRestrictionSettingsSchema.KeyEnabled, defaultValue: true),
-                IsEnabledForced = _options.Value.IpAddresses.Count > 0,
-                IpHeader = ipHeader,
-                IsIpHeaderForced = ipHeaderForced
+                Enabled          = ParseBool(lookup, AccessRestrictionSettingsSchema.KeyEnabled, defaultValue: true),
+                IpHeader         = ipHeader,
+                IsIpHeaderForced = ipHeaderForced,
+                ConsiderRemoteIp = ParseBool(lookup, AccessRestrictionSettingsSchema.KeyConsiderRemoteIp, defaultValue: false)
             };
         }
 
@@ -102,3 +103,4 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
         }
     }
 }
+

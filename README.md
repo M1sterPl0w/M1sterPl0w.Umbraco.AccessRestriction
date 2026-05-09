@@ -1,18 +1,19 @@
 # M1sterPl0w.Umbraco.AccessRestriction
 
-An Umbraco package that restricts access to your site (or specific paths) by IP address whitelist. Manage whitelisted IPs and restricted paths from a dashboard in the Umbraco backoffice, with optional hardcoded entries via `appsettings.json`.
+An Umbraco package that controls access to your site through a flexible **rule engine**. Define access rules combining IP address, request path, and Umbraco user group conditions — managed from a dashboard in the Umbraco backoffice, with optional hardcoded static rules via `appsettings.json`.
 
 ---
 
 ## Features
 
-- **IP whitelisting** — only allow requests from specific IP addresses
-- **Restricted paths** — limit enforcement to specific paths (e.g. `/umbraco`); when no paths are configured, the entire site is restricted
-- **Backoffice dashboard** — manage IPs and paths through a built-in Umbraco dashboard
-- **Static entries via `appsettings.json`** — hardcode IPs and paths that cannot be deleted through the UI
-- **Force-enabled** — if any IPs are configured in `appsettings.json`, the restriction is always active and cannot be disabled from the UI
-- **Custom IP header** — configure which HTTP header to read the client IP from (e.g. `X-Forwarded-For` behind a reverse proxy); defaults to the connection remote IP
-- **IPv4-mapped IPv6** support — `::ffff:x.x.x.x` addresses are automatically normalised
+- **Rule engine** — compose access rules from multiple conditions (`Ip`, `Path`, `UserGroup`)
+- **AND / OR logic** — each rule can require ALL conditions to match or just ANY one
+- **Allow / Deny outcomes** — rules can explicitly allow or deny access
+- **Backoffice dashboard** — create and manage rules and their conditions without redeployment
+- **Static rules via `appsettings.json`** — hardcode rules that are read-only in the UI
+- **Umbraco user group condition** — restrict paths to specific backoffice user groups
+- **Custom IP header** — support reverse proxies via `X-Forwarded-For` or `X-Real-IP`
+- **IPv4-mapped IPv6** normalisation — `::ffff:x.x.x.x` is automatically mapped to `x.x.x.x`
 
 ---
 
@@ -26,8 +27,6 @@ An Umbraco package that restricts access to your site (or specific paths) by IP 
 
 ## Installation
 
-Install via NuGet:
-
 ```
 dotnet add package M1sterPl0w.Umbraco.AccessRestriction
 ```
@@ -36,38 +35,79 @@ The package auto-registers itself through Umbraco's composer pattern — no manu
 
 ---
 
+## How it works
+
+The middleware runs on every HTTP request:
+
+1. **Disabled check** — if the restriction is disabled, allow all requests.
+2. **No rules** — if no rules are configured, allow all requests.
+3. **Rule evaluation** — rules are evaluated in sort order. The first rule whose conditions match determines the outcome (`Allow` or `Deny`).
+4. **No match** — if no rule matches, the request is allowed through (default-allow).
+
+### Condition types
+
+| Type | Matches when… |
+|---|---|
+| `Ip` | The resolved client IP is in the allowlist |
+| `Path` | The request path starts with any of the listed paths |
+| `UserGroup` | The authenticated user belongs to any of the listed Umbraco user groups |
+
+> **Future-proof:** Combined with the rule's `Result` field, an `Ip` condition in an `Allow` rule acts as an IP allowlist; in a `Deny` rule it acts as an IP blocklist. A dedicated `IpBlocklist` condition type may be added in a future release.
+
+### Rule logic
+
+| `RequireAll` | Behaviour |
+|---|---|
+| `true` | ALL conditions in the rule must match (AND) |
+| `false` | ANY condition in the rule must match (OR) |
+
+---
+
 ## Configuration
 
 ### Enable / disable
 
-Open the **Access Restriction** dashboard in the Umbraco backoffice and toggle **Enable IP whitelisting**.
+Open the **Access Restriction** dashboard in the Umbraco backoffice and toggle **Enable access restriction**.
 
-### `appsettings.json`
+### Static rules via `appsettings.json`
 
-Add the following section to your `appsettings.json` to hardcode IPs and/or paths:
+Rules defined in configuration are read-only in the UI (marked **static**) and are always evaluated before database rules:
 
 ```json
 "AccessRestriction": {
-  "IpAddresses": [
-    { "IpAddress": "1.2.3.4", "Description": "Office" },
-    { "IpAddress": "5.6.7.8", "Description": "VPN" }
-  ],
-  "Paths": [
-    { "Path": "/umbraco", "Description": "Backoffice" }
+  "IpHeader": "X-Forwarded-For",
+  "Rules": [
+    {
+      "Name": "Allow backoffice from office IPs",
+      "Description": "Restrict /umbraco to known office IPs",
+      "RequireAll": true,
+      "Result": "Allow",
+      "SortOrder": 0,
+      "Conditions": [
+        { "Type": "Path",  "Values": ["/umbraco"] },
+        { "Type": "Ip",    "Values": ["1.2.3.4", "5.6.7.8"] }
+      ]
+    },
+    {
+      "Name": "Deny everyone else from backoffice",
+      "RequireAll": false,
+      "Result": "Deny",
+      "SortOrder": 1,
+      "Conditions": [
+        { "Type": "Path", "Values": ["/umbraco"] }
+      ]
+    }
   ]
 }
 ```
 
-- Entries from `appsettings.json` appear in the dashboard marked **static** and cannot be deleted.
-- If any `IpAddresses` are present, the restriction is **force-enabled** and the toggle in the dashboard is locked.
-
 ### IP header (reverse proxy / load balancer)
 
-By default the middleware uses the connection's remote IP address. When your site runs behind a reverse proxy or load balancer that forwards the original client IP in a request header, configure that header name:
+By default the middleware uses the connection's remote IP. To read the original client IP from a forwarding header:
 
-**Via the dashboard** — open the *Settings* section and fill in the **IP header** field (e.g. `X-Forwarded-For` or `X-Real-IP`). Leave it empty to fall back to the remote IP.
+**Via the dashboard** — fill in the **IP header** field (e.g. `X-Forwarded-For`).
 
-**Via `appsettings.json`** — set `IpHeader` to enforce the value; it overrides anything saved through the dashboard:
+**Via `appsettings.json`** — forces the value and locks the field in the UI:
 
 ```json
 "AccessRestriction": {
@@ -75,20 +115,7 @@ By default the middleware uses the connection's remote IP address. When your sit
 }
 ```
 
-> **Note:** When using `X-Forwarded-For`, only the first (left-most) address in the header is used, as it represents the original client IP.
-
----
-
-## How it works
-
-The middleware runs on every request and applies the following logic:
-
-1. **Disabled check** — if the restriction is disabled *and* not force-enabled by config, the request is allowed through.
-2. **Path check** — if restricted paths are configured, only requests matching those paths are subject to the IP check. Requests to other paths are allowed through.
-3. **No paths configured** — all paths are restricted.
-4. **No IPs configured** — all requests are allowed (restriction is inactive).
-5. **IP resolution** — if an IP header is configured, the client IP is read from that header (first value for `X-Forwarded-For`-style headers); otherwise the connection remote IP is used.
-6. **IP check** — if the resolved IP is in the whitelist, the request is allowed. Otherwise a `403 Forbidden` is returned.
+> When using `X-Forwarded-For`, only the first (left-most) address is used.
 
 ---
 
@@ -98,6 +125,34 @@ Three tables are created automatically on first startup via Umbraco's migration 
 
 | Table | Purpose |
 |---|---|
+| `AccessRestrictionSettings` | Global settings (enabled flag, IP header) |
+| `AccessRestrictionRules` | Access rules (name, logic, result, sort order) |
+| `AccessRestrictionConditions` | Conditions belonging to each rule (type + JSON values) |
+
+---
+
+## Building the frontend
+
+The backoffice dashboard is built with Lit + TypeScript using Vite.
+
+```bash
+cd M1sterPl0w.Umbraco.AccessRestriction/Client
+npm install
+npm run build
+```
+
+For development with file watching:
+
+```bash
+npm run watch
+```
+
+---
+
+## License
+
+MIT
+
 | `AccessRestrictionIpAddresses` | Whitelisted IP addresses |
 | `AccessRestrictionSettings` | Package settings (enabled flag) |
 | `AccessRestrictionPaths` | Restricted paths |

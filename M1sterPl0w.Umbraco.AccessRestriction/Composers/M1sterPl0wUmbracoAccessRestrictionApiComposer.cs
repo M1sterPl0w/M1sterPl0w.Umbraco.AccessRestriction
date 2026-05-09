@@ -2,6 +2,7 @@ using Asp.Versioning;
 using M1sterPl0w.Umbraco.AccessRestriction.Middleware;
 using M1sterPl0w.Umbraco.AccessRestriction.Migrations;
 using M1sterPl0w.Umbraco.AccessRestriction.Models;
+using M1sterPl0w.Umbraco.AccessRestriction.RuleEngine;
 using M1sterPl0w.Umbraco.AccessRestriction.Services;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -23,35 +24,26 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Composers
         {
             builder.Services.AddSingleton<IOperationIdHandler, CustomOperationHandler>();
             builder.Services.Configure<AccessRestrictionOptions>(builder.Config.GetSection(AccessRestrictionOptions.SectionName));
-            builder.Services.AddTransient<Microsoft.AspNetCore.Hosting.IStartupFilter, IpAccessRestrictionStartupFilter>();
+            builder.Services.AddTransient<Microsoft.AspNetCore.Hosting.IStartupFilter, AccessRestrictionStartupFilter>();
 
-            // Register repository
-            builder.Services.AddScoped<IIpAddressRepository, IpAddressRepository>();
+            // Repositories
             builder.Services.AddScoped<ISettingsRepository, SettingsRepository>();
-            builder.Services.AddScoped<IRestrictedPathRepository, RestrictedPathRepository>();
+            builder.Services.AddScoped<IRuleRepository, RuleRepository>();
 
-            // Register migration handler
+            // Rule engine
+            builder.Services.AddScoped<IAccessRuleEngine, AccessRuleEngine>();
+
+            // Migration handler
             builder.AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, RunAccessRestrictionMigrationHandler>();
 
             builder.Services.Configure<SwaggerGenOptions>(opt =>
             {
-                // Related documentation:
-                // https://docs.umbraco.com/umbraco-cms/tutorials/creating-a-backoffice-api
-                // https://docs.umbraco.com/umbraco-cms/tutorials/creating-a-backoffice-api/adding-a-custom-swagger-document
-                // https://docs.umbraco.com/umbraco-cms/tutorials/creating-a-backoffice-api/versioning-your-api
-                // https://docs.umbraco.com/umbraco-cms/tutorials/creating-a-backoffice-api/access-policies
-
-                // Configure the Swagger generation options
-                // Add in a new Swagger API document solely for our own package that can be browsed via Swagger UI
-                // Along with having a generated swagger JSON file that we can use to auto generate a TypeScript client
                 opt.SwaggerDoc(Constants.ApiName, new OpenApiInfo
                 {
-                    Title = "M1sterPl 0wUmbraco Access Restriction Backoffice API",
+                    Title = "M1sterPl0w Umbraco Access Restriction Backoffice API",
                     Version = "1.0"
                 });
 
-                // Enable Umbraco authentication for the "Example" Swagger document
-                // PR: https://github.com/umbraco/Umbraco-CMS/pull/15699
                 opt.OperationFilter<M1sterPl0wUmbracoAccessRestrictionOperationSecurityFilter>();
             });
         }
@@ -61,9 +53,6 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Composers
             protected override string ApiName => Constants.ApiName;
         }
 
-        // This is used to generate nice operation IDs in our swagger json file
-        // So that the gnerated TypeScript client has nice method names and not too verbose
-        // https://docs.umbraco.com/umbraco-cms/tutorials/creating-a-backoffice-api/umbraco-schema-and-operation-ids#operation-ids
         public class CustomOperationHandler : OperationIdHandler
         {
             public CustomOperationHandler(IOptions<ApiVersioningOptions> apiVersioningOptions) : base(apiVersioningOptions)
@@ -72,10 +61,13 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Composers
 
             protected override bool CanHandle(ApiDescription apiDescription, ControllerActionDescriptor controllerActionDescriptor)
             {
-                return controllerActionDescriptor.ControllerTypeInfo.Namespace?.StartsWith("M1sterPl0w.Umbraco.AccessRestriction.Controllers", comparisonType: StringComparison.InvariantCultureIgnoreCase) is true;
+                return controllerActionDescriptor.ControllerTypeInfo.Namespace?.StartsWith(
+                    "M1sterPl0w.Umbraco.AccessRestriction.Controllers",
+                    StringComparison.InvariantCultureIgnoreCase) is true;
             }
 
-            public override string Handle(ApiDescription apiDescription) => $"{apiDescription.ActionDescriptor.RouteValues["action"]}";
+            public override string Handle(ApiDescription apiDescription)
+                => $"{apiDescription.ActionDescriptor.RouteValues["action"]}";
         }
     }
 }

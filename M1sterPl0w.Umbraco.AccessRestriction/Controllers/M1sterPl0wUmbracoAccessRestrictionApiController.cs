@@ -11,20 +11,20 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
     [ApiExplorerSettings(GroupName = "M1sterPl0w.Umbraco.AccessRestriction")]
     public class M1sterPl0wUmbracoAccessRestrictionApiController : M1sterPl0wUmbracoAccessRestrictionApiControllerBase
     {
-        private readonly IIpAddressRepository _repository;
+        private readonly IRuleRepository _ruleRepository;
         private readonly ISettingsRepository _settingsRepository;
-        private readonly IRestrictedPathRepository _pathsRepository;
         private readonly IBackOfficeSecurityAccessor _backOfficeSecurityAccessor;
 
+        private static readonly HashSet<string> ValidConditionTypes =
+            new(StringComparer.Ordinal) { "Ip", "Path", "UserGroup" };
+
         public M1sterPl0wUmbracoAccessRestrictionApiController(
-            IIpAddressRepository repository,
+            IRuleRepository ruleRepository,
             ISettingsRepository settingsRepository,
-            IRestrictedPathRepository pathsRepository,
             IBackOfficeSecurityAccessor backOfficeSecurityAccessor)
         {
-            _repository = repository;
+            _ruleRepository = ruleRepository;
             _settingsRepository = settingsRepository;
-            _pathsRepository = pathsRepository;
             _backOfficeSecurityAccessor = backOfficeSecurityAccessor;
         }
 
@@ -32,50 +32,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
         [ProducesResponseType<string>(StatusCodes.Status200OK)]
         public string Ping() => "Pong";
 
-        [HttpGet("ipaddresses")]
-        [ProducesResponseType<IReadOnlyList<AllowedIpAddressDto>>(StatusCodes.Status200OK)]
-        public async Task<IReadOnlyList<AllowedIpAddressDto>> GetIpAddresses()
-            => await _repository.GetAllAsync();
-
-        [HttpGet("ipaddresses/mine")]
-        [ProducesResponseType<string>(StatusCodes.Status200OK)]
-        public async Task<string> GetMyIpAddress()
-        {
-            var settings = await _settingsRepository.GetAsync();
-            if (!string.IsNullOrWhiteSpace(settings.IpHeader))
-            {
-                var headerValue = HttpContext.Request.Headers[settings.IpHeader].FirstOrDefault();
-                var ip = headerValue?.Split(',')[0].Trim();
-                return string.IsNullOrEmpty(ip) ? "unknown" : ip;
-            }
-
-            var remoteIp = HttpContext.Connection.RemoteIpAddress;
-            if (remoteIp?.IsIPv4MappedToIPv6 == true) remoteIp = remoteIp.MapToIPv4();
-            return remoteIp?.ToString() ?? "unknown";
-        }
-
-        [HttpPost("ipaddresses")]
-        [ProducesResponseType(StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> AddIpAddress([FromBody] CreateAllowedIpAddressRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request.IpAddress))
-                return BadRequest("IP address is required.");
-
-            var createdBy = _backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Name
-                ?? User.Identity?.Name;
-            var added = await _repository.AddAsync(request.IpAddress.Trim(), request.Description, createdBy);
-            return added ? StatusCode(StatusCodes.Status201Created) : Conflict("IP address already exists.");
-        }
-
-        [HttpDelete("ipaddresses/{ipAddress}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> DeleteIpAddress(string ipAddress)
-        {
-            var deleted = await _repository.DeleteAsync(ipAddress);
-            return deleted ? NoContent() : NotFound();
-        }
+        // ── Settings ─────────────────────────────────────────────────────────────
 
         [HttpGet("settings")]
         [ProducesResponseType<SettingsDto>(StatusCodes.Status200OK)]
@@ -90,34 +47,96 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
             return NoContent();
         }
 
-        [HttpGet("paths")]
-        [ProducesResponseType<IReadOnlyList<RestrictedPathDto>>(StatusCodes.Status200OK)]
-        public async Task<IReadOnlyList<RestrictedPathDto>> GetRestrictedPaths()
-            => await _pathsRepository.GetAllAsync();
-
-        [HttpPost("paths")]
-        [ProducesResponseType(StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> AddRestrictedPath([FromBody] CreateRestrictedPathRequest request)
+        [HttpGet("myip")]
+        [ProducesResponseType<string>(StatusCodes.Status200OK)]
+        public async Task<string> GetMyIp()
         {
-            if (string.IsNullOrWhiteSpace(request.Path))
-                return BadRequest("Path is required.");
+            var settings = await _settingsRepository.GetAsync();
+            if (!string.IsNullOrWhiteSpace(settings.IpHeader))
+            {
+                var headerValue = HttpContext.Request.Headers[settings.IpHeader].FirstOrDefault();
+                var ip = headerValue?.Split(',')[0].Trim();
+                return string.IsNullOrEmpty(ip) ? "unknown" : ip;
+            }
+
+            var remoteIp = HttpContext.Connection.RemoteIpAddress;
+            if (remoteIp?.IsIPv4MappedToIPv6 == true) remoteIp = remoteIp.MapToIPv4();
+            return remoteIp?.ToString() ?? "unknown";
+        }
+
+        // ── Rules ─────────────────────────────────────────────────────────────────
+
+        [HttpGet("rules")]
+        [ProducesResponseType<IReadOnlyList<AccessRuleDto>>(StatusCodes.Status200OK)]
+        public async Task<IReadOnlyList<AccessRuleDto>> GetRules()
+            => await _ruleRepository.GetAllAsync();
+
+        [HttpPost("rules")]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> CreateRule([FromBody] CreateRuleRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                return BadRequest("Name is required.");
+            if (request.Result != "Allow" && request.Result != "Deny")
+                return BadRequest("Result must be 'Allow' or 'Deny'.");
 
             var createdBy = _backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Name
                 ?? User.Identity?.Name;
-            var added = await _pathsRepository.AddAsync(request.Path.TrimEnd('/'), request.Description, createdBy);
-            return added ? StatusCode(StatusCodes.Status201Created) : Conflict("Path already exists.");
+            var id = await _ruleRepository.CreateRuleAsync(request, createdBy);
+            return StatusCode(StatusCodes.Status201Created, new { id });
         }
 
-        [HttpDelete("paths/{*path}")]
+        [HttpPut("rules/{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpdateRule(int id, [FromBody] UpdateRuleRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                return BadRequest("Name is required.");
+            if (request.Result != "Allow" && request.Result != "Deny")
+                return BadRequest("Result must be 'Allow' or 'Deny'.");
+
+            var updated = await _ruleRepository.UpdateRuleAsync(id, request);
+            return updated ? NoContent() : NotFound();
+        }
+
+        [HttpDelete("rules/{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> DeleteRestrictedPath(string path)
+        public async Task<IActionResult> DeleteRule(int id)
         {
-            var decoded = Uri.UnescapeDataString(path).TrimEnd('/');
-            if (!decoded.StartsWith('/')) decoded = "/" + decoded;
-            var deleted = await _pathsRepository.DeleteAsync(decoded);
+            var deleted = await _ruleRepository.DeleteRuleAsync(id);
+            return deleted ? NoContent() : NotFound();
+        }
+
+        // ── Conditions ────────────────────────────────────────────────────────────
+
+        [HttpPost("rules/{ruleId:int}/conditions")]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> AddCondition(int ruleId, [FromBody] CreateConditionRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Type))
+                return BadRequest("Type is required.");
+            if (!ValidConditionTypes.Contains(request.Type))
+                return BadRequest($"Type must be one of: {string.Join(", ", ValidConditionTypes)}.");
+            if (request.Values.Count == 0)
+                return BadRequest("At least one value is required.");
+
+            var id = await _ruleRepository.AddConditionAsync(ruleId, request);
+            return StatusCode(StatusCodes.Status201Created, new { id });
+        }
+
+        [HttpDelete("conditions/{conditionId:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DeleteCondition(int conditionId)
+        {
+            var deleted = await _ruleRepository.DeleteConditionAsync(conditionId);
             return deleted ? NoContent() : NotFound();
         }
     }
 }
+

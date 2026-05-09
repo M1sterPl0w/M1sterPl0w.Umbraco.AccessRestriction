@@ -12,6 +12,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Models
 
         public const string KeyEnabled = "Enabled";
         public const string KeyIpHeader = "IpHeader";
+        public const string KeyConsiderRemoteIp = "ConsiderRemoteIp";
 
         [Column("Key")]
         [Length(100)]
