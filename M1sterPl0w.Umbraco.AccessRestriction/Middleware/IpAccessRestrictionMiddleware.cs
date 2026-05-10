@@ -14,7 +14,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
             _next = next;
         }
 
-        public async Task InvokeAsync(HttpContext context, IAccessRuleEngine ruleEngine, ISettingsRepository settingsRepository)
+        public async Task InvokeAsync(HttpContext context, IAccessRuleEngine ruleEngine, ISettingsRepository settingsRepository, IContentUrlResolver contentUrlResolver)
         {
             SettingsDto settings;
             try
@@ -40,7 +40,17 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
 
             if (!await ruleEngine.EvaluateAsync(context))
             {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                if (settings.DenyContentNodeKey.HasValue)
+                {
+                    var redirectUrl = contentUrlResolver.GetUrl(settings.DenyContentNodeKey.Value);
+                    if (!string.IsNullOrEmpty(redirectUrl))
+                    {
+                        context.Response.Redirect(redirectUrl);
+                        return;
+                    }
+                }
+
+                context.Response.StatusCode = settings.DenyStatusCode;
                 await context.Response.WriteAsync("Access denied.");
                 return;
             }

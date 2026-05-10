@@ -41,16 +41,20 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
                 Upsert(scope, AccessRestrictionSettingsSchema.KeyIpHeader, settings.IpHeader ?? string.Empty);
 
             Upsert(scope, AccessRestrictionSettingsSchema.KeyConsiderRemoteIp, settings.ConsiderRemoteIp ? "true" : "false");
+            Upsert(scope, AccessRestrictionSettingsSchema.KeyDenyStatusCode, settings.DenyStatusCode.ToString());
+            Upsert(scope, AccessRestrictionSettingsSchema.KeyDenyContentNodeKey, settings.DenyContentNodeKey?.ToString() ?? string.Empty);
 
             scope.Complete();
 
             var ipHeaderForced = !string.IsNullOrWhiteSpace(_options.Value.IpHeader);
             _cache.Set(Constants.CacheKeys.Settings, new SettingsDto
             {
-                Enabled          = settings.Enabled,
-                IpHeader         = ipHeaderForced ? _options.Value.IpHeader : settings.IpHeader,
-                IsIpHeaderForced = ipHeaderForced,
-                ConsiderRemoteIp = settings.ConsiderRemoteIp
+                Enabled            = settings.Enabled,
+                IpHeader           = ipHeaderForced ? _options.Value.IpHeader : settings.IpHeader,
+                IsIpHeaderForced   = ipHeaderForced,
+                ConsiderRemoteIp   = settings.ConsiderRemoteIp,
+                DenyStatusCode     = settings.DenyStatusCode,
+                DenyContentNodeKey = settings.DenyContentNodeKey
             }, _cacheOptions);
             return Task.CompletedTask;
         }
@@ -81,10 +85,12 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
 
             return new SettingsDto
             {
-                Enabled          = ParseBool(lookup, AccessRestrictionSettingsSchema.KeyEnabled, defaultValue: true),
-                IpHeader         = ipHeader,
-                IsIpHeaderForced = ipHeaderForced,
-                ConsiderRemoteIp = ParseBool(lookup, AccessRestrictionSettingsSchema.KeyConsiderRemoteIp, defaultValue: false)
+                Enabled            = ParseBool(lookup, AccessRestrictionSettingsSchema.KeyEnabled, defaultValue: true),
+                IpHeader           = ipHeader,
+                IsIpHeaderForced   = ipHeaderForced,
+                ConsiderRemoteIp   = ParseBool(lookup, AccessRestrictionSettingsSchema.KeyConsiderRemoteIp, defaultValue: false),
+                DenyStatusCode     = ParseInt(lookup, AccessRestrictionSettingsSchema.KeyDenyStatusCode, defaultValue: 403),
+                DenyContentNodeKey = ParseGuid(lookup, AccessRestrictionSettingsSchema.KeyDenyContentNodeKey)
             };
         }
 
@@ -100,6 +106,20 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
             if (lookup.TryGetValue(key, out var val) && bool.TryParse(val, out var result))
                 return result;
             return defaultValue;
+        }
+
+        private static int ParseInt(Dictionary<string, string?> lookup, string key, int defaultValue)
+        {
+            if (lookup.TryGetValue(key, out var val) && int.TryParse(val, out var result))
+                return result;
+            return defaultValue;
+        }
+
+        private static Guid? ParseGuid(Dictionary<string, string?> lookup, string key)
+        {
+            if (lookup.TryGetValue(key, out var val) && Guid.TryParse(val, out var result))
+                return result;
+            return null;
         }
     }
 }

@@ -41,8 +41,12 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
 
         [HttpPut("settings")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> SaveSettings([FromBody] SettingsDto settings)
         {
+            if (settings.DenyStatusCode is < 100 or > 599)
+                return BadRequest("DenyStatusCode must be between 100 and 599.");
+
             await _settingsRepository.SaveAsync(settings);
             return NoContent();
         }

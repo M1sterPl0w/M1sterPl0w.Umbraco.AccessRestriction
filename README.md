@@ -8,6 +8,7 @@ An Umbraco package that controls access to your site through a flexible **rule e
 
 - **Rule engine** — compose access rules from multiple conditions (`Ip`, `Path`, `UserGroup`)
 - **Flexible IP matching** — exact address, CIDR range (e.g. `10.0.0.0/8`), or wildcard pattern (e.g. `192.168.1.*`)
+- **Custom deny response** — choose any HTTP status code (default `403`) and optionally redirect to an Umbraco content node
 - **AND / OR logic** — each rule can require ALL conditions to match or just ANY one
 - **Allow / Deny outcomes** — rules can explicitly allow or deny access
 - **Backoffice dashboard** — create and manage rules and their conditions without redeployment
@@ -130,6 +131,30 @@ By default the middleware uses the connection's remote IP. To read the original 
 ```
 
 > When using `X-Forwarded-For`, only the first (left-most) address is used.
+
+---
+
+### Deny response
+
+When a request is denied you can control what the visitor sees.
+
+**Via the dashboard** — configure the **Deny status code** and, optionally, a **Deny content node**.
+
+| Setting | Default | Description |
+|---|---|---|
+| Deny status code | `403` | HTTP status code returned when access is denied. Any value 100–599 is accepted (e.g. `403`, `404`, `451`). |
+| Deny content node | *(none)* | When set, the visitor is redirected (302) to this Umbraco content node's URL instead of receiving a plain text response. Useful for a branded "Access denied" or custom 404 page. |
+
+> If a content node is configured but its URL cannot be resolved (e.g. the node was deleted), the middleware falls back to returning the configured status code.
+
+**Example — redirect to a custom error page:**
+
+1. Create a content node in Umbraco (e.g. `/access-denied`).
+2. Open the **Access Restriction** dashboard.
+3. Set **Deny status code** to `403` (or any preferred code).
+4. Pick the content node in the **Deny content node** picker.
+
+The visitor will now be redirected to `/access-denied` instead of seeing a bare status code response.
 
 ---
 

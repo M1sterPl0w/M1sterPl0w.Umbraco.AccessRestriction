@@ -33,6 +33,9 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Composers
             // Rule engine
             builder.Services.AddScoped<IAccessRuleEngine, AccessRuleEngine>();
 
+            // Content URL resolver (used by middleware to redirect to a content node on deny)
+            builder.Services.AddScoped<IContentUrlResolver, UmbracoContentUrlResolver>();
+
             // Migration handler
             builder.AddNotificationAsyncHandler<UmbracoApplicationStartedNotification, RunAccessRestrictionMigrationHandler>();
 

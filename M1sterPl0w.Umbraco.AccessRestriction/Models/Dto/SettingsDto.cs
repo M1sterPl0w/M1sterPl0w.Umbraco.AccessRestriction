@@ -12,5 +12,11 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Models
 
         /// <remarks>When true and an IP header is configured, the raw socket remote IP is also checked alongside the header IP.</remarks>
         public required bool ConsiderRemoteIp { get; init; }
+
+        /// <remarks>HTTP status code returned when access is denied. Defaults to 403.</remarks>
+        public int DenyStatusCode { get; init; } = 403;
+
+        /// <remarks>Optional Umbraco content node key. When set, the denied user is redirected to this node's URL.</remarks>
+        public Guid? DenyContentNodeKey { get; init; }
     }
 }
