@@ -101,15 +101,102 @@ public class IpConditionTests
         Assert.False(condition.IsMatch(ctx));
     }
 
+    // ── CIDR notation ───────────────────────────────────────────────────────
+
     [Fact]
-    public void IsMatch_CidrNotation_IsNotSupportedSoNoMatch()
+    public void IsMatch_CidrNotation_IPv4_IpInRange_ReturnsTrue()
     {
-        // CIDR notation is stored as a literal string; "192.168.1.0/24" ≠ "192.168.1.50"
         var condition = new IpCondition { AllowedIps = ["192.168.1.0/24"] };
         var ctx = new TestHttpContextBuilder().WithIpItems("192.168.1.50").Build();
 
+        Assert.True(condition.IsMatch(ctx));
+    }
+
+    [Fact]
+    public void IsMatch_CidrNotation_IPv4_IpOutOfRange_ReturnsFalse()
+    {
+        var condition = new IpCondition { AllowedIps = ["192.168.1.0/24"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("192.168.2.1").Build();
+
         Assert.False(condition.IsMatch(ctx));
     }
+
+    [Fact]
+    public void IsMatch_CidrNotation_IPv4_NetworkAddress_ReturnsTrue()
+    {
+        var condition = new IpCondition { AllowedIps = ["10.0.0.0/8"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("10.255.255.255").Build();
+
+        Assert.True(condition.IsMatch(ctx));
+    }
+
+    [Fact]
+    public void IsMatch_CidrNotation_IPv6_IpInRange_ReturnsTrue()
+    {
+        var condition = new IpCondition { AllowedIps = ["2001:db8::/32"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("2001:db8::1").Build();
+
+        Assert.True(condition.IsMatch(ctx));
+    }
+
+    [Fact]
+    public void IsMatch_CidrNotation_IPv6_IpOutOfRange_ReturnsFalse()
+    {
+        var condition = new IpCondition { AllowedIps = ["2001:db8::/32"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("2001:db9::1").Build();
+
+        Assert.False(condition.IsMatch(ctx));
+    }
+
+    // ── Wildcard patterns ───────────────────────────────────────────────────
+
+    [Fact]
+    public void IsMatch_WildcardLastOctet_MatchesAnyInSubnet()
+    {
+        var condition = new IpCondition { AllowedIps = ["192.168.1.*"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("192.168.1.99").Build();
+
+        Assert.True(condition.IsMatch(ctx));
+    }
+
+    [Fact]
+    public void IsMatch_WildcardLastOctet_DoesNotMatchOtherSubnet()
+    {
+        var condition = new IpCondition { AllowedIps = ["192.168.1.*"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("192.168.2.1").Build();
+
+        Assert.False(condition.IsMatch(ctx));
+    }
+
+    [Fact]
+    public void IsMatch_WildcardMultipleOctets_MatchesRange()
+    {
+        var condition = new IpCondition { AllowedIps = ["10.0.*.*"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("10.0.5.200").Build();
+
+        Assert.True(condition.IsMatch(ctx));
+    }
+
+    [Fact]
+    public void IsMatch_WildcardSingleChar_QuestionMark_Matches()
+    {
+        var condition = new IpCondition { AllowedIps = ["10.0.0.?"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("10.0.0.5").Build();
+
+        Assert.True(condition.IsMatch(ctx));
+    }
+
+    [Fact]
+    public void IsMatch_WildcardSingleChar_QuestionMark_NoMatch()
+    {
+        // "10.0.0.?" matches exactly one character after the last dot — "10" has two chars
+        var condition = new IpCondition { AllowedIps = ["10.0.0.?"] };
+        var ctx = new TestHttpContextBuilder().WithIpItems("10.0.0.10").Build();
+
+        Assert.False(condition.IsMatch(ctx));
+    }
+
+    // ── Localhost ────────────────────────────────────────────────────────────
 
     [Fact]
     public void IsMatch_Localhost_IPv4_ReturnsTrue()

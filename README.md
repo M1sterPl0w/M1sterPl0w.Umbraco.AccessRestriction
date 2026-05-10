@@ -7,6 +7,7 @@ An Umbraco package that controls access to your site through a flexible **rule e
 ## Features
 
 - **Rule engine** — compose access rules from multiple conditions (`Ip`, `Path`, `UserGroup`)
+- **Flexible IP matching** — exact address, CIDR range (e.g. `10.0.0.0/8`), or wildcard pattern (e.g. `192.168.1.*`)
 - **AND / OR logic** — each rule can require ALL conditions to match or just ANY one
 - **Allow / Deny outcomes** — rules can explicitly allow or deny access
 - **Backoffice dashboard** — create and manage rules and their conditions without redeployment
@@ -48,9 +49,22 @@ The middleware runs on every HTTP request:
 
 | Type | Matches when… |
 |---|---|
-| `Ip` | The resolved client IP is in the allowlist |
+| `Ip` | The resolved client IP matches any entry in the allowlist (exact, CIDR, or wildcard — see below) |
 | `Path` | The request path starts with any of the listed paths |
 | `UserGroup` | The authenticated user belongs to any of the listed Umbraco user groups |
+
+#### IP matching formats
+
+Each value in an `Ip` condition can be:
+
+| Format | Example | Matches |
+|---|---|---|
+| Exact IP | `192.168.1.1` | That specific address only |
+| CIDR range | `192.168.1.0/24` | Any address in the subnet (`192.168.1.0` – `192.168.1.255`) |
+| Wildcard `*` | `192.168.1.*` | Any address where `*` replaces one or more characters |
+| Wildcard `?` | `10.0.0.?` | Any address where `?` replaces exactly one character |
+
+> IPv6 CIDR ranges are also supported, e.g. `2001:db8::/32`.
 
 > **Future-proof:** Combined with the rule's `Result` field, an `Ip` condition in an `Allow` rule acts as an IP allowlist; in a `Deny` rule it acts as an IP blocklist. A dedicated `IpBlocklist` condition type may be added in a future release.
 
@@ -85,7 +99,7 @@ Rules defined in configuration are read-only in the UI (marked **static**) and a
       "SortOrder": 0,
       "Conditions": [
         { "Type": "Path",  "Values": ["/umbraco"] },
-        { "Type": "Ip",    "Values": ["1.2.3.4", "5.6.7.8"] }
+        { "Type": "Ip",    "Values": ["1.2.3.4", "5.6.7.8", "192.168.1.*", "10.0.0.0/8"] }
       ]
     },
     {
