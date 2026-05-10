@@ -45,6 +45,20 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
                     var redirectUrl = contentUrlResolver.GetUrl(settings.DenyContentNodeKey.Value);
                     if (!string.IsNullOrEmpty(redirectUrl))
                     {
+                        // Guard against infinite redirect: extract just the path from the URL
+                        // (GetUrl may return an absolute URL like https://example.com/access-denied).
+                        var requestPath = context.Request.Path.Value ?? string.Empty;
+                        var redirectPath = Uri.TryCreate(redirectUrl, UriKind.Absolute, out var uri)
+                            ? uri.AbsolutePath
+                            : redirectUrl.Split('?')[0];
+
+                        if (string.Equals(requestPath.TrimEnd('/'), redirectPath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Already on the deny page — let Umbraco render it instead of showing plain text.
+                            await _next(context);
+                            return;
+                        }
+
                         context.Response.Redirect(redirectUrl);
                         return;
                     }

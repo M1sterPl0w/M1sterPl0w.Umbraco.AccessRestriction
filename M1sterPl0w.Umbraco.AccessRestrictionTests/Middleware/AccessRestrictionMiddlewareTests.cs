@@ -120,14 +120,52 @@ public class AccessRestrictionMiddlewareTests
         var nodeKey = Guid.NewGuid();
         var middleware = CreateMiddleware();
         var ctx = BuildContext();
+        ctx.Request.Path = "/some-other-page";
 
         await middleware.InvokeAsync(ctx,
             RuleEngine(allows: false).Object,
             EnabledSettings(denyContentNodeKey: nodeKey).Object,
-            ContentUrlResolver(nodeKey, "/access-denied").Object);
+            ContentUrlResolver(nodeKey, "https://example.com/access-denied").Object);
 
         Assert.Equal(302, ctx.Response.StatusCode);
-        Assert.Equal("/access-denied", ctx.Response.Headers.Location.ToString());
+        Assert.Equal("https://example.com/access-denied", ctx.Response.Headers.Location.ToString());
+    }
+
+    [Fact]
+    public async Task InvokeAsync_AccessDenied_AlreadyOnDenyPage_AbsoluteUrl_CallsNext()
+    {
+        // When already on the deny page, Umbraco should render the page rather than returning plain text.
+        var nodeKey = Guid.NewGuid();
+        var nextCalled = false;
+        var middleware = CreateMiddleware(_ => { nextCalled = true; return Task.CompletedTask; });
+        var ctx = BuildContext();
+        ctx.Request.Path = "/access-denied";
+
+        await middleware.InvokeAsync(ctx,
+            RuleEngine(allows: false).Object,
+            EnabledSettings(denyStatusCode: 403, denyContentNodeKey: nodeKey).Object,
+            ContentUrlResolver(nodeKey, "https://example.com/access-denied").Object);
+
+        Assert.True(nextCalled);
+        Assert.False(ctx.Response.Headers.ContainsKey("Location"));
+    }
+
+    [Fact]
+    public async Task InvokeAsync_AccessDenied_AlreadyOnDenyPage_TrailingSlashIgnored()
+    {
+        var nodeKey = Guid.NewGuid();
+        var nextCalled = false;
+        var middleware = CreateMiddleware(_ => { nextCalled = true; return Task.CompletedTask; });
+        var ctx = BuildContext();
+        ctx.Request.Path = "/access-denied/";
+
+        await middleware.InvokeAsync(ctx,
+            RuleEngine(allows: false).Object,
+            EnabledSettings(denyStatusCode: 403, denyContentNodeKey: nodeKey).Object,
+            ContentUrlResolver(nodeKey, "https://example.com/access-denied").Object);
+
+        Assert.True(nextCalled);
+        Assert.False(ctx.Response.Headers.ContainsKey("Location"));
     }
 
     [Fact]

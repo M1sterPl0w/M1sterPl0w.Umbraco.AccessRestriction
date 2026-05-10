@@ -1,6 +1,7 @@
 import { css, html, customElement, state } from '@umbraco-cms/backoffice/external/lit';
 import { UmbLitElement } from '@umbraco-cms/backoffice/lit-element';
 import { umbHttpClient } from '@umbraco-cms/backoffice/http-client';
+import type { UmbInputDocumentElement } from '@umbraco-cms/backoffice/document';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -9,6 +10,8 @@ interface Settings {
     ipHeader: string | null;
     isIpHeaderForced: boolean;
     considerRemoteIp: boolean;
+    denyStatusCode: number;
+    denyContentNodeKey: string | null;
 }
 
 interface Condition {
@@ -45,7 +48,7 @@ const CONDITION_LABELS: Record<string, string> = {
 @customElement('access-restriction-dashboard')
 export default class AccessRestrictionDashboardElement extends UmbLitElement {
     // Data
-    @state() private _settings: Settings = { enabled: true, ipHeader: null, isIpHeaderForced: false, considerRemoteIp: false };
+    @state() private _settings: Settings = { enabled: true, ipHeader: null, isIpHeaderForced: false, considerRemoteIp: false, denyStatusCode: 403, denyContentNodeKey: null };
     @state() private _rules: AccessRule[] = [];
     @state() private _loading = true;
     @state() private _error = '';
@@ -281,6 +284,31 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
                             this._saveSettings();
                         }}>
                     </uui-toggle>
+
+                    <span class="settings-label">Deny status code</span>
+                    <uui-input
+                        type="number"
+                        min="100"
+                        max="599"
+                        placeholder="403"
+                        .value=${String(this._settings.denyStatusCode)}
+                        @input=${(e: Event) => {
+                            const v = parseInt((e.target as HTMLInputElement).value, 10);
+                            if (!isNaN(v)) this._settings = { ...this._settings, denyStatusCode: v };
+                        }}
+                        @blur=${() => this._saveSettings()}>
+                    </uui-input>
+
+                    <span class="settings-label">Deny content node</span>
+                    <umb-input-document
+                        max="1"
+                        .value=${this._settings.denyContentNodeKey ?? ''}
+                        @change=${(e: Event) => {
+                            const val = (e.target as UmbInputDocumentElement).value ?? null;
+                            this._settings = { ...this._settings, denyContentNodeKey: val || null };
+                            this._saveSettings();
+                        }}>
+                    </umb-input-document>
                 </div>
             </div>
         `;
