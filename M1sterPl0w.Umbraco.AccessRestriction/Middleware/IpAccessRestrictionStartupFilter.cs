@@ -3,13 +3,13 @@ using Microsoft.AspNetCore.Hosting;
 
 namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
 {
-    public class IpAccessRestrictionStartupFilter : IStartupFilter
+    public class AccessRestrictionStartupFilter : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
         {
             return app =>
             {
-                app.UseMiddleware<IpAccessRestrictionMiddleware>();
+                app.UseMiddleware<AccessRestrictionMiddleware>();
                 next(app);
             };
         }

@@ -1,75 +1,92 @@
+using M1sterPl0w.Umbraco.AccessRestriction.Models;
+using M1sterPl0w.Umbraco.AccessRestriction.RuleEngine;
 using M1sterPl0w.Umbraco.AccessRestriction.Services;
 using Microsoft.AspNetCore.Http;
+
 namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
 {
-    public class IpAccessRestrictionMiddleware
+    public class AccessRestrictionMiddleware
     {
         private readonly RequestDelegate _next;
 
-        public IpAccessRestrictionMiddleware(RequestDelegate next)
+        public AccessRestrictionMiddleware(RequestDelegate next)
         {
             _next = next;
         }
 
-        public async Task InvokeAsync(HttpContext context, IIpAddressRepository repository, ISettingsRepository settingsRepository, IRestrictedPathRepository pathsRepository)
+        public async Task InvokeAsync(HttpContext context, IAccessRuleEngine ruleEngine, ISettingsRepository settingsRepository, IContentUrlResolver contentUrlResolver)
         {
-            var settings = await settingsRepository.GetAsync();
-
-            // If restriction is disabled and not forced by appsettings, allow everything
-            if (!settings.Enabled && !settings.IsEnabledForced)
+            var settings =  await settingsRepository.GetAsync();
+            if (!settings.Enabled)
             {
                 await _next(context);
                 return;
             }
 
-            var path = context.Request.Path.Value ?? string.Empty;
-            var restrictedPaths = await pathsRepository.GetAllAsync();
+            context.Items[Constants.ClientIpItemKey] = ExtractClientIps(context, settings.IpHeader, settings.ConsiderRemoteIp);
 
-            // If the request path does not match any configured restricted path, allow it
-            if (restrictedPaths.Count > 0 && !restrictedPaths.Any(rp =>
+            if (!await ruleEngine.EvaluateAsync(context))
             {
-                var rpNorm = rp.Path.TrimEnd('/');
-                return path.Equals(rpNorm, StringComparison.OrdinalIgnoreCase)
-                    || path.StartsWith(rpNorm + "/", StringComparison.OrdinalIgnoreCase);
-            }))
-            {
-                await _next(context);
+                if (settings.DenyContentNodeKey.HasValue)
+                {
+                    var redirectUrl = contentUrlResolver.GetUrl(settings.DenyContentNodeKey.Value);
+                    if (!string.IsNullOrEmpty(redirectUrl))
+                    {
+                        var requestPath = context.Request.Path.Value ?? string.Empty;
+                        var redirectPath = Uri.TryCreate(redirectUrl, UriKind.Absolute, out var uri)
+                            ? uri.AbsolutePath
+                            : redirectUrl.Split('?')[0];
+
+                        if (string.Equals(requestPath.TrimEnd('/'), redirectPath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+                        {
+                            await _next(context);
+                            return;
+                        }
+
+                        context.Response.Redirect(redirectUrl);
+                        return;
+                    }
+                }
+
+                context.Response.StatusCode = settings.DenyStatusCode;
+                await context.Response.WriteAsync("Access denied.");
                 return;
             }
 
-            var allowedIps = await repository.GetAllAsync();
+            await _next(context);
+        }
 
-            // If no IPs are configured, the restriction is inactive — allow everything
-            if (allowedIps.Count == 0)
+        private static List<string> ExtractClientIps(HttpContext context, string? ipHeader, bool considerRemoteIp)
+        {
+            var remoteIp = context.Connection.RemoteIpAddress;
+            if (remoteIp?.IsIPv4MappedToIPv6 == true)
             {
-                await _next(context);
-                return;
+                remoteIp = remoteIp.MapToIPv4();
             }
 
-            string? clientIpString;
-            if (!string.IsNullOrWhiteSpace(settings.IpHeader))
+            var remoteIpStr = remoteIp?.ToString();
+
+            if (!string.IsNullOrWhiteSpace(ipHeader))
             {
-                // Read IP from the configured forwarding header; X-Forwarded-For may contain a comma-separated list
-                var headerValue = context.Request.Headers[settings.IpHeader].FirstOrDefault();
-                clientIpString = headerValue?.Split(',')[0].Trim();
-            }
-            else
-            {
-                var remoteIp = context.Connection.RemoteIpAddress;
-                // Normalise IPv4-mapped IPv6 addresses (::ffff:x.x.x.x → x.x.x.x)
-                if (remoteIp?.IsIPv4MappedToIPv6 == true)
-                    remoteIp = remoteIp.MapToIPv4();
-                clientIpString = remoteIp?.ToString();
+                var headerValue = context.Request.Headers[ipHeader].FirstOrDefault();
+                var headerIp = headerValue?.Split(',')[0].Trim();
+
+                var ips = new List<string>();
+                if (headerIp != null)
+                {
+                    ips.Add(headerIp);
+                }
+
+                if (considerRemoteIp && remoteIpStr != null)
+                {
+                    ips.Add(remoteIpStr);
+                }
+                
+                return ips;
             }
 
-            if (!string.IsNullOrEmpty(clientIpString) && allowedIps.Any(e => e.IpAddress == clientIpString))
-            {
-                await _next(context);
-                return;
-            }
-
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsync("Access denied: your IP address is not allowed.");
+            return remoteIpStr != null ? [remoteIpStr] : [];
         }
     }
 }
+

@@ -30,10 +30,13 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Migrations
         public async Task HandleAsync(UmbracoApplicationStartedNotification notification, CancellationToken cancellationToken)
         {
             if (_runtimeState.Level < RuntimeLevel.Run)
+            {
                 return;
+            }
 
             var plan = new AccessRestrictionMigrationPlan();
             var upgrader = new Upgrader(plan);
+            
             await upgrader.ExecuteAsync(_migrationPlanExecutor, _coreScopeProvider, _keyValueService);
         }
     }
