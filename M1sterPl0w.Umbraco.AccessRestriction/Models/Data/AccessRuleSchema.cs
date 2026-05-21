@@ -1,5 +1,5 @@
 using NPoco;
-using M1sterPl0w.Umbraco.AccessRestriction.Constants;
+using M1sterPl0w.Umbraco.AccessRestriction.Constant;
 using Umbraco.Cms.Infrastructure.Persistence.DatabaseAnnotations;
 
 namespace M1sterPl0w.Umbraco.AccessRestriction.Models

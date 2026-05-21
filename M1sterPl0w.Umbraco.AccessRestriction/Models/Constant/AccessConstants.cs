@@ -1,4 +1,4 @@
-namespace M1sterPl0w.Umbraco.AccessRestriction.Constants
+namespace M1sterPl0w.Umbraco.AccessRestriction.Constant
 {
     public static class AccessConstants 
     {

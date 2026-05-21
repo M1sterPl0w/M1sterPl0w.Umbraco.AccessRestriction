@@ -1,4 +1,4 @@
-using M1sterPl0w.Umbraco.AccessRestriction.Constants;
+using M1sterPl0w.Umbraco.AccessRestriction.Constant;
 using M1sterPl0w.Umbraco.AccessRestriction.Models;
 using M1sterPl0w.Umbraco.AccessRestriction.Services;
 using Microsoft.AspNetCore.Http;
