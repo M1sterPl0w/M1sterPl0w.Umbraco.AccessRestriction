@@ -1,0 +1,51 @@
+{
+  "$schema": "https://marketplace.umbraco.com/umbraco-marketplace-schema.json",
+  "AuthorDetails": {
+    "Name": "M1sterPl0w",
+    "Url": "https://github.com/M1sterPl0w"
+  },
+  "Category": "Developer Tools",
+  "Description": "An Umbraco package that controls access to your site through a flexible rule engine. Define access rules combining IP address, request path, and Umbraco user group conditions — managed from a dashboard in the Umbraco backoffice, with optional hardcoded static rules via appsettings.json.",
+  "DocumentationUrl": "https://github.com/M1sterPl0w/M1sterPl0w.Umbraco.AccessRestriction",
+  "IssueTrackerUrl": "https://github.com/M1sterPl0w/M1sterPl0w.Umbraco.AccessRestriction/issues",
+  "LicenseTypes": [
+    "MIT"
+  ],
+  "Name": "M1sterPl0w.Umbraco.AccessRestriction",
+  "PackageType": "Package",
+  "RepositoryUrl": "https://github.com/M1sterPl0w/M1sterPl0w.Umbraco.AccessRestriction",
+  "Tags": [
+    "umbraco",
+    "security",
+    "access-control",
+    "ip-restriction",
+    "middleware",
+    "backoffice",
+    "authorization",
+    "rules-engine",
+    "user-groups",
+    "reverse-proxy"
+  ],
+  "Title": "Access Restriction",
+  "UmbracoVersion": {
+    "Major": 17,
+    "Minor": 0,
+    "Patch": 0
+  },
+  "RelatedPackages": [],
+  "Screenshots": [],
+  "Features": [
+    "Flexible access rule engine",
+    "IP address matching with exact, CIDR, and wildcard support",
+    "Path-based access restrictions",
+    "Umbraco backoffice user group restrictions",
+    "Allow and deny rule outcomes",
+    "AND / OR condition logic",
+    "Backoffice dashboard for rule management",
+    "Static read-only rules via appsettings.json",
+    "Custom deny response with configurable status code",
+    "Optional redirect to Umbraco content node on deny",
+    "Reverse proxy IP header support",
+    "IPv4-mapped IPv6 normalization"
+  ]
+}
