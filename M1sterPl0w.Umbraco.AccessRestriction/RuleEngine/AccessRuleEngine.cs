@@ -1,3 +1,4 @@
+using M1sterPl0w.Umbraco.AccessRestriction.Constants;
 using M1sterPl0w.Umbraco.AccessRestriction.Models;
 using M1sterPl0w.Umbraco.AccessRestriction.Services;
 using Microsoft.AspNetCore.Http;
@@ -21,12 +22,16 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.RuleEngine
             var rules = await _ruleRepository.GetAllAsync();
 
             if (rules.Count == 0)
-                return true; // No rules configured → allow everything
+            {
+                return true;
+            }
 
             foreach (var rule in rules.OrderBy(r => r.SortOrder))
             {
                 if (rule.Conditions.Count == 0)
-                    continue; // Skip empty rules
+                {
+                    continue;
+                }
 
                 var conditions = rule.Conditions
                     .Select(CreateCondition)
@@ -37,31 +42,33 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.RuleEngine
                     : conditions.Any(c => c.IsMatch(context));
 
                 if (matches)
-                    return rule.Result == "Allow";
+                {
+                    return rule.Result == AccessConstants.Allow;
+                }
             }
 
-            return true; // No rule matched → default allow
+            return true;
         }
 
         private IAccessCondition CreateCondition(ConditionDto dto)
         {
             return dto.Type switch
             {
-                "Ip"        => new IpCondition        { AllowedIps = dto.Values },
-                "Path"      => new PathCondition      { Paths      = dto.Values },
+                "Ip" => new IpCondition        { AllowedIps = dto.Values },
+                "Path" => new PathCondition      { Paths      = dto.Values },
                 "UserGroup" => new UserGroupCondition { Groups     = dto.Values },
-                _           => LogUnknownAndDeny(dto.Type)
+                _ => LogUnknownAndDeny(dto.Type)
             };
         }
 
         private IAccessCondition LogUnknownAndDeny(string type)
         {
             _logger.LogWarning("Unknown condition type '{Type}' skipped in rule engine.", type);
+            
             return new AlwaysDenyCondition();
         }
     }
 
-    /// <summary>Sentinel condition that never matches — used when a condition type is unrecognised.</summary>
     internal sealed class AlwaysDenyCondition : IAccessCondition
     {
         public bool IsMatch(HttpContext context) => false;

@@ -12,8 +12,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
         private readonly IMemoryCache _cache;
         private readonly IOptions<AccessRestrictionOptions> _options;
 
-        private static readonly MemoryCacheEntryOptions CacheOptions =
-            new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(5));
+        private static readonly MemoryCacheEntryOptions CacheOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(5));
 
         public RuleRepository(IScopeProvider scopeProvider, IMemoryCache cache, IOptions<AccessRestrictionOptions> options)
         {
@@ -29,6 +28,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
                 cached = await FetchFromDbAsync();
                 _cache.Set(Constants.CacheKeys.Rules, cached, CacheOptions);
             }
+
             return cached;
         }
 
@@ -37,34 +37,42 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
             using var scope = _scopeProvider.CreateScope();
             var schema = new AccessRuleSchema
             {
-                Name       = request.Name,
+                Name = request.Name,
                 Description = request.Description,
-                RequireAll  = request.RequireAll,
-                Result      = request.Result,
-                SortOrder   = 0,
+                RequireAll = request.RequireAll,
+                Result = request.Result,
+                SortOrder = 0,
                 CreatedDate = DateTime.UtcNow,
-                CreatedBy   = createdBy
+                CreatedBy = createdBy
             };
             var newId = Convert.ToInt32(await scope.Database.InsertAsync(schema));
+           
             scope.Complete();
             InvalidateCache();
+           
             return newId;
         }
 
         public async Task<bool> UpdateRuleAsync(int id, UpdateRuleRequest request)
         {
             using var scope = _scopeProvider.CreateScope();
-            // Fetch the existing row by PK — WHERE fragment lets NPoco handle table/column quoting
             var existing = scope.Database.Fetch<AccessRuleSchema>("WHERE Id = @0", id).FirstOrDefault();
-            if (existing is null) { scope.Complete(); return false; }
-            existing.Name        = request.Name;
+            if (existing is null) 
+            { 
+                scope.Complete(); 
+                return false; 
+            }
+           
+            existing.Name = request.Name;
             existing.Description = request.Description;
-            existing.RequireAll  = request.RequireAll;
-            existing.Result      = request.Result;
-            existing.SortOrder   = request.SortOrder;
+            existing.RequireAll = request.RequireAll;
+            existing.Result = request.Result;
+            existing.SortOrder = request.SortOrder;
+            
             scope.Database.Update(existing);
             scope.Complete();
             InvalidateCache();
+
             return true;
         }
 
@@ -72,14 +80,22 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
         {
             using var scope = _scopeProvider.CreateScope();
             var rule = scope.Database.Fetch<AccessRuleSchema>("WHERE Id = @0", id).FirstOrDefault();
-            if (rule is null) { scope.Complete(); return false; }
-            // Remove conditions belonging to this rule first
+            if (rule is null) 
+            { 
+                scope.Complete(); 
+                return false; 
+            }
+
             var conditions = scope.Database.Fetch<AccessConditionSchema>("WHERE RuleId = @0", id);
             foreach (var condition in conditions)
+            {
                 scope.Database.Delete(condition);
+            }
+
             scope.Database.Delete(rule);
             scope.Complete();
             InvalidateCache();
+            
             return true;
         }
 
@@ -89,13 +105,16 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
             using var scope = _scopeProvider.CreateScope();
             var schema = new AccessConditionSchema
             {
-                RuleId        = ruleId,
+                RuleId = ruleId,
                 ConditionType = request.Type,
-                Values        = valuesJson
+                Values = valuesJson
             };
+
             var newId = Convert.ToInt32(await scope.Database.InsertAsync(schema));
+            
             scope.Complete();
             InvalidateCache();
+            
             return newId;
         }
 
@@ -103,10 +122,16 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
         {
             using var scope = _scopeProvider.CreateScope();
             var condition = scope.Database.Fetch<AccessConditionSchema>("WHERE Id = @0", conditionId).FirstOrDefault();
-            if (condition is null) { scope.Complete(); return false; }
+            if (condition is null) 
+            { 
+                scope.Complete(); 
+                return false; 
+            }
+
             scope.Database.Delete(condition);
             scope.Complete();
             InvalidateCache();
+            
             return true;
         }
 
@@ -115,7 +140,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
         private async Task<IReadOnlyList<AccessRuleDto>> FetchFromDbAsync()
         {
             using var scope = _scopeProvider.CreateScope();
-            var rules      = await scope.Database.FetchAsync<AccessRuleSchema>();
+            var rules = await scope.Database.FetchAsync<AccessRuleSchema>();
             var conditions = await scope.Database.FetchAsync<AccessConditionSchema>();
             scope.Complete();
 
@@ -127,43 +152,42 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
                 .OrderBy(r => r.SortOrder)
                 .Select(r => new AccessRuleDto
                 {
-                    Id          = r.Id,
-                    Name        = r.Name,
+                    Id = r.Id,
+                    Name = r.Name,
                     Description = r.Description,
-                    RequireAll  = r.RequireAll,
-                    Result      = r.Result,
-                    SortOrder   = r.SortOrder,
-                    CanDelete   = true,
-                    CreatedBy   = r.CreatedBy,
+                    RequireAll = r.RequireAll,
+                    Result = r.Result,
+                    SortOrder = r.SortOrder,
+                    CanDelete = true,
+                    CreatedBy = r.CreatedBy,
                     CreatedDate = r.CreatedDate,
-                    Conditions  = conditionsByRule.TryGetValue(r.Id, out var conds)
+                    Conditions = conditionsByRule.TryGetValue(r.Id, out var conds)
                         ? conds.Select(c => new ConditionDto
                         {
-                            Id       = c.Id,
-                            Type     = c.ConditionType,
-                            Values   = DeserializeValues(c.Values),
+                            Id = c.Id,
+                            Type = c.ConditionType,
+                            Values = DeserializeValues(c.Values),
                             CanDelete = true
                         }).ToList()
                         : []
                 })
                 .ToList();
 
-            // Static rules from appsettings are prepended with negative IDs and CanDelete = false
             var staticRules = _options.Value.Rules
                 .Select((r, i) => new AccessRuleDto
                 {
-                    Id          = -(i + 1),
-                    Name        = r.Name,
+                    Id = -(i + 1),
+                    Name = r.Name,
                     Description = r.Description,
-                    RequireAll  = r.RequireAll,
-                    Result      = r.Result,
-                    SortOrder   = r.SortOrder,
-                    CanDelete   = false,
-                    Conditions  = r.Conditions.Select((c, ci) => new ConditionDto
+                    RequireAll = r.RequireAll,
+                    Result = r.Result,
+                    SortOrder = r.SortOrder,
+                    CanDelete = false,
+                    Conditions = r.Conditions.Select((c, ci) => new ConditionDto
                     {
-                        Id        = -(ci + 1),
-                        Type      = c.Type,
-                        Values    = c.Values,
+                        Id = -(ci + 1),
+                        Type = c.Type,
+                        Values = c.Values,
                         CanDelete = false
                     }).ToList()
                 })
@@ -174,8 +198,14 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Services
 
         private static List<string> DeserializeValues(string json)
         {
-            try { return JsonSerializer.Deserialize<List<string>>(json) ?? []; }
-            catch  { return []; }
+            try 
+            { 
+                return JsonSerializer.Deserialize<List<string>>(json) ?? []; 
+            }
+            catch  
+            { 
+                return []; 
+            }
         }
     }
 }

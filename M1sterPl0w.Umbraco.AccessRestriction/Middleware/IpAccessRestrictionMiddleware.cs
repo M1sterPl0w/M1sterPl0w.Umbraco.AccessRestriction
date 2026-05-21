@@ -16,26 +16,13 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
 
         public async Task InvokeAsync(HttpContext context, IAccessRuleEngine ruleEngine, ISettingsRepository settingsRepository, IContentUrlResolver contentUrlResolver)
         {
-            SettingsDto settings;
-            try
-            {
-                settings = await settingsRepository.GetAsync();
-            }
-            catch
-            {
-                // Database tables are not yet available (e.g. first startup before migrations run).
-                // Allow the request through so Umbraco can initialise and execute migrations.
-                await _next(context);
-                return;
-            }
-
+            var settings =  await settingsRepository.GetAsync();
             if (!settings.Enabled)
             {
                 await _next(context);
                 return;
             }
 
-            // Resolve the client IP(s) once and store them so conditions can read without re-fetching settings
             context.Items[Constants.ClientIpItemKey] = ExtractClientIps(context, settings.IpHeader, settings.ConsiderRemoteIp);
 
             if (!await ruleEngine.EvaluateAsync(context))
@@ -45,8 +32,6 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
                     var redirectUrl = contentUrlResolver.GetUrl(settings.DenyContentNodeKey.Value);
                     if (!string.IsNullOrEmpty(redirectUrl))
                     {
-                        // Guard against infinite redirect: extract just the path from the URL
-                        // (GetUrl may return an absolute URL like https://example.com/access-denied).
                         var requestPath = context.Request.Path.Value ?? string.Empty;
                         var redirectPath = Uri.TryCreate(redirectUrl, UriKind.Absolute, out var uri)
                             ? uri.AbsolutePath
@@ -54,7 +39,6 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
 
                         if (string.Equals(requestPath.TrimEnd('/'), redirectPath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
                         {
-                            // Already on the deny page — let Umbraco render it instead of showing plain text.
                             await _next(context);
                             return;
                         }
@@ -76,7 +60,10 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
         {
             var remoteIp = context.Connection.RemoteIpAddress;
             if (remoteIp?.IsIPv4MappedToIPv6 == true)
+            {
                 remoteIp = remoteIp.MapToIPv4();
+            }
+
             var remoteIpStr = remoteIp?.ToString();
 
             if (!string.IsNullOrWhiteSpace(ipHeader))
@@ -85,8 +72,16 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Middleware
                 var headerIp = headerValue?.Split(',')[0].Trim();
 
                 var ips = new List<string>();
-                if (headerIp != null) ips.Add(headerIp);
-                if (considerRemoteIp && remoteIpStr != null) ips.Add(remoteIpStr);
+                if (headerIp != null)
+                {
+                    ips.Add(headerIp);
+                }
+
+                if (considerRemoteIp && remoteIpStr != null)
+                {
+                    ips.Add(remoteIpStr);
+                }
+                
                 return ips;
             }
 

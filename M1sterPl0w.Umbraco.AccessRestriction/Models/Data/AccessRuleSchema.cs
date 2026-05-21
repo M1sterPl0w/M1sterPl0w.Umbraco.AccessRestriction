@@ -1,4 +1,5 @@
 using NPoco;
+using M1sterPl0w.Umbraco.AccessRestriction.Constants;
 using Umbraco.Cms.Infrastructure.Persistence.DatabaseAnnotations;
 
 namespace M1sterPl0w.Umbraco.AccessRestriction.Models
@@ -30,7 +31,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Models
         [Column("Result")]
         [Length(10)]
         [NullSetting(NullSetting = NullSettings.NotNull)]
-        public string Result { get; set; } = "Allow";
+        public string Result { get; set; } = AccessConstants.Allow;
 
         [Column("SortOrder")]
         [NullSetting(NullSetting = NullSettings.NotNull)]

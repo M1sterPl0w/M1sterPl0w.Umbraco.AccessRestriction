@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using M1sterPl0w.Umbraco.AccessRestriction.Constants;
 using M1sterPl0w.Umbraco.AccessRestriction.Models;
 using M1sterPl0w.Umbraco.AccessRestriction.Services;
 using Microsoft.AspNetCore.Http;
@@ -32,8 +33,6 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
         [ProducesResponseType<string>(StatusCodes.Status200OK)]
         public string Ping() => "Pong";
 
-        // ── Settings ─────────────────────────────────────────────────────────────
-
         [HttpGet("settings")]
         [ProducesResponseType<SettingsDto>(StatusCodes.Status200OK)]
         public async Task<SettingsDto> GetSettings()
@@ -45,9 +44,12 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
         public async Task<IActionResult> SaveSettings([FromBody] SettingsDto settings)
         {
             if (settings.DenyStatusCode is < 100 or > 599)
+            {
                 return BadRequest("DenyStatusCode must be between 100 and 599.");
+            }
 
             await _settingsRepository.SaveAsync(settings);
+          
             return NoContent();
         }
 
@@ -64,11 +66,13 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
             }
 
             var remoteIp = HttpContext.Connection.RemoteIpAddress;
-            if (remoteIp?.IsIPv4MappedToIPv6 == true) remoteIp = remoteIp.MapToIPv4();
+            if (remoteIp?.IsIPv4MappedToIPv6 == true)
+            {
+                remoteIp = remoteIp.MapToIPv4();
+            }    
+          
             return remoteIp?.ToString() ?? "unknown";
         }
-
-        // ── Rules ─────────────────────────────────────────────────────────────────
 
         [HttpGet("rules")]
         [ProducesResponseType<IReadOnlyList<AccessRuleDto>>(StatusCodes.Status200OK)]
@@ -81,13 +85,18 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
         public async Task<IActionResult> CreateRule([FromBody] CreateRuleRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
+            {
                 return BadRequest("Name is required.");
-            if (request.Result != "Allow" && request.Result != "Deny")
-                return BadRequest("Result must be 'Allow' or 'Deny'.");
+            }
 
-            var createdBy = _backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Name
-                ?? User.Identity?.Name;
+            if (request.Result != AccessConstants.Allow && request.Result != AccessConstants.Deny)
+            {
+                return BadRequest("Result must be 'Allow' or 'Deny'.");
+            }
+
+            var createdBy = _backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Name ?? User.Identity?.Name;
             var id = await _ruleRepository.CreateRuleAsync(request, createdBy);
+
             return StatusCode(StatusCodes.Status201Created, new { id });
         }
 
@@ -98,11 +107,17 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
         public async Task<IActionResult> UpdateRule(int id, [FromBody] UpdateRuleRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
+            {
                 return BadRequest("Name is required.");
-            if (request.Result != "Allow" && request.Result != "Deny")
+            }
+
+            if (request.Result != AccessConstants.Allow && request.Result != AccessConstants.Deny)
+            {
                 return BadRequest("Result must be 'Allow' or 'Deny'.");
+            }
 
             var updated = await _ruleRepository.UpdateRuleAsync(id, request);
+            
             return updated ? NoContent() : NotFound();
         }
 
@@ -112,10 +127,9 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
         public async Task<IActionResult> DeleteRule(int id)
         {
             var deleted = await _ruleRepository.DeleteRuleAsync(id);
+            
             return deleted ? NoContent() : NotFound();
         }
-
-        // ── Conditions ────────────────────────────────────────────────────────────
 
         [HttpPost("rules/{ruleId:int}/conditions")]
         [ProducesResponseType(StatusCodes.Status201Created)]
@@ -123,13 +137,22 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
         public async Task<IActionResult> AddCondition(int ruleId, [FromBody] CreateConditionRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Type))
+            {
                 return BadRequest("Type is required.");
+            }
+
             if (!ValidConditionTypes.Contains(request.Type))
+            {
                 return BadRequest($"Type must be one of: {string.Join(", ", ValidConditionTypes)}.");
+            }
+
             if (request.Values.Count == 0)
+            {
                 return BadRequest("At least one value is required.");
+            }
 
             var id = await _ruleRepository.AddConditionAsync(ruleId, request);
+            
             return StatusCode(StatusCodes.Status201Created, new { id });
         }
 
@@ -139,6 +162,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Controllers
         public async Task<IActionResult> DeleteCondition(int conditionId)
         {
             var deleted = await _ruleRepository.DeleteConditionAsync(conditionId);
+            
             return deleted ? NoContent() : NotFound();
         }
     }

@@ -21,8 +21,6 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Migrations
                     Value = "403"
                 });
             }
-
-            // DenyContentNodeKey is optional — no default row needed; repository handles missing key as null.
         }
     }
 }

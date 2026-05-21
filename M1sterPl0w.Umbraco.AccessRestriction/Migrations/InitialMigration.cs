@@ -1,3 +1,4 @@
+using M1sterPl0w.Umbraco.AccessRestriction.Constants
 using M1sterPl0w.Umbraco.AccessRestriction.Models;
 using Umbraco.Cms.Infrastructure.Migrations;
 
@@ -47,7 +48,7 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Migrations
                     .WithColumn("Name").AsString(200).NotNullable()
                     .WithColumn("Description").AsString(500).Nullable()
                     .WithColumn("RequireAll").AsBoolean().NotNullable().WithDefaultValue(true)
-                    .WithColumn("Result").AsString(10).NotNullable().WithDefaultValue("Allow")
+                    .WithColumn("Result").AsString(10).NotNullable().WithDefaultValue(AccessConstants.Allow)
                     .WithColumn("SortOrder").AsInt32().NotNullable().WithDefaultValue(0)
                     .WithColumn("CreatedDate").AsDateTime().Nullable()
                     .WithColumn("CreatedBy").AsString(200).Nullable()

@@ -22,7 +22,6 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Models
         [NullSetting(NullSetting = NullSettings.NotNull)]
         public string ConditionType { get; set; } = string.Empty;
 
-        /// <summary>JSON-serialised array of string values (e.g. IP addresses, paths, group names).</summary>
         [Column("Values")]
         [NullSetting(NullSetting = NullSettings.NotNull)]
         public string Values { get; set; } = "[]";
