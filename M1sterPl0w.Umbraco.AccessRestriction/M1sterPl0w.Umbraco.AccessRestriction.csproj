@@ -15,7 +15,7 @@
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/M1sterPl0w/M1sterPl0w.Umbraco.AccessRestriction</PackageProjectUrl>
-  
+    <PackageTags>umbraco;umbraco-marketplace;package;plugin;security;access-restriction;ip-whitelist;ip-blacklist;backoffice;middleware</PackageTags>
   </PropertyGroup>
 
 
