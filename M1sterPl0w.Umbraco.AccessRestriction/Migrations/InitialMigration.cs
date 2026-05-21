@@ -1,4 +1,4 @@
-using M1sterPl0w.Umbraco.AccessRestriction.Constants
+using M1sterPl0w.Umbraco.AccessRestriction.Constants;
 using M1sterPl0w.Umbraco.AccessRestriction.Models;
 using Umbraco.Cms.Infrastructure.Migrations;
 
