@@ -88,8 +88,8 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
                 umbHttpClient.get({ url: `${API_BASE}/settings`, security: AUTH }),
                 umbHttpClient.get({ url: `${API_BASE}/rules`, security: AUTH }),
             ]);
-            if (settingsRes.response.ok) this._settings = settingsRes.data as Settings;
-            if (rulesRes.response.ok) this._rules = (rulesRes.data as AccessRule[]) ?? [];
+            if (settingsRes.response?.ok) this._settings = settingsRes.data as Settings;
+            if (rulesRes.response?.ok) this._rules = (rulesRes.data as AccessRule[]) ?? [];
         } catch {
             this._error = 'Failed to load data.';
         } finally {
@@ -139,7 +139,7 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
                 },
                 headers: { 'Content-Type': 'application/json' },
             });
-            if (res.response.status === 201) {
+            if (res.response?.status === 201) {
                 this._newRuleName = '';
                 this._newRuleDescription = '';
                 this._newRuleResult = 'Allow';
@@ -147,7 +147,7 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
                 this._showAddRuleForm = false;
                 await this._load();
             } else {
-                this._error = `Failed to create rule (${res.response.status}).`;
+                this._error = `Failed to create rule (${res.response?.status}).`;
             }
         } catch {
             this._error = 'Failed to create rule.';
@@ -160,10 +160,10 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
         this._error = '';
         try {
             const res = await umbHttpClient.delete({ url: `${API_BASE}/rules/${id}`, security: AUTH });
-            if (res.response.ok) {
+            if (res.response?.ok) {
                 await this._load();
             } else {
-                this._error = `Failed to delete rule (${res.response.status}).`;
+                this._error = `Failed to delete rule (${res.response?.status}).`;
             }
         } catch {
             this._error = 'Failed to delete rule.';
@@ -202,12 +202,12 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
                 body: { type: this._newConditionType, values },
                 headers: { 'Content-Type': 'application/json' },
             });
-            if (res.response.status === 201) {
+            if (res.response?.status === 201) {
                 this._addConditionRuleId = null;
                 this._newConditionValues = '';
                 await this._load();
             } else {
-                this._error = `Failed to add condition (${res.response.status}).`;
+                this._error = `Failed to add condition (${res.response?.status}).`;
             }
         } catch {
             this._error = 'Failed to add condition.';
@@ -220,10 +220,10 @@ export default class AccessRestrictionDashboardElement extends UmbLitElement {
         this._error = '';
         try {
             const res = await umbHttpClient.delete({ url: `${API_BASE}/conditions/${conditionId}`, security: AUTH });
-            if (res.response.ok) {
+            if (res.response?.ok) {
                 await this._load();
             } else {
-                this._error = `Failed to delete condition (${res.response.status}).`;
+                this._error = `Failed to delete condition (${res.response?.status}).`;
             }
         } catch {
             this._error = 'Failed to delete condition.';

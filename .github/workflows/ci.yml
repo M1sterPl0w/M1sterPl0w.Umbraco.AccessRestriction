@@ -2,18 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/v17]
   pull_request:
-    branches: [main]
+    branches: [main, release/v17]
 
 jobs:
   build:
-    name: Build & Verify (Umbraco ${{ matrix.umbraco }})
+    name: Build & Verify
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        umbraco: [17, 18]
     permissions:
       contents: read
 
@@ -42,13 +38,13 @@ jobs:
           dotnet-version: '10.x'
 
       - name: Restore
-        run: dotnet restore -p:UmbracoMajor=${{ matrix.umbraco }}
+        run: dotnet restore
 
       - name: Build
-        run: dotnet build --configuration Release --no-restore -p:UmbracoMajor=${{ matrix.umbraco }}
+        run: dotnet build --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test --configuration Release --no-build -p:UmbracoMajor=${{ matrix.umbraco }}
+        run: dotnet test --configuration Release --no-build
 
       - name: Pack (dry-run)
-        run: dotnet pack --configuration Release --no-build -p:Version=0.0.0-ci -p:UmbracoMajor=${{ matrix.umbraco }}
+        run: dotnet pack --configuration Release --no-build -p:Version=0.0.0-ci

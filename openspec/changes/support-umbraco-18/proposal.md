@@ -6,17 +6,19 @@ The package only installs on Umbraco 17 (`Umbraco.Cms.*` pinned to `[17.0.0,17.9
 
 ## What Changes
 
-- Build the package for both Umbraco 17 and Umbraco 18 from one source tree. A build switch selects the Umbraco major. Both Umbraco 17 and 18 target `net10.0`, so the target framework cannot make the selection.
-- Align the package major version with the Umbraco major: `17.x.y` depends on Umbraco 17 only, and `18.x.y` depends on Umbraco 18 only. Package minor and patch numbers stay owned by this package. They do not track Umbraco minors.
-- **BREAKING** (versioning only): the next releases jump from `2.0.2` to `17.0.0` and `18.0.0`. Runtime behavior and the public API do not change.
-- Release workflow: the tag's major (`v17.0.0` / `v18.0.0`) selects the Umbraco major to build and pack against. A tag whose major is not a supported Umbraco major fails the release.
-- CI builds, tests and pack-dry-runs both Umbraco majors.
-- README documents the package-to-Umbraco version mapping.
+- `main` targets Umbraco 18 only and releases `18.x.y`.
+- A new support branch, `release/v17`, is cut from the current Umbraco 17 code on `main` (`025e942`). It releases `17.x.y` and receives Umbraco 17 hotfixes. No conditional compilation and no CI matrix: each branch builds exactly one Umbraco major.
+- The package major version equals the Umbraco major: `17.x.y` depends on Umbraco 17 only, and `18.x.y` depends on Umbraco 18 only. Minor and patch numbers belong to this package and do not track Umbraco minors.
+- **BREAKING** (versioning only): the next releases jump from `2.0.2` to `17.0.0` (from `release/v17`) and `18.0.0` (from `main`). Runtime behavior and the public API do not change.
+- Pack fails when the version major does not equal the branch's Umbraco major. A wrongly targeted release tag therefore fails before publishing.
+- Hotfix flow: fixes land on `main` and are cherry-picked to `release/v17` when they apply to Umbraco 17. Fixes that only affect 17 land on `release/v17` directly.
+- CI and release workflows run on both `main` and `release/v17`, each verifying its own major.
+- The README documents the package-to-Umbraco version mapping and the branch policy.
 
 ## Capabilities
 
 ### New Capabilities
-- `umbraco-compatibility`: which Umbraco versions a package release supports, how the package version relates to the Umbraco major, and how a release picks its Umbraco major.
+- `umbraco-compatibility`: which Umbraco versions a package release supports, how the package version relates to the Umbraco major, which branch produces each major, and how hotfixes flow between branches.
 
 ### Modified Capabilities
 
@@ -24,12 +26,17 @@ None. Request handling, rule engine, conditions and rule management keep their b
 
 ## Impact
 
-- `Directory.Packages.props`: the Umbraco version range becomes driven by the selected major instead of hard-coded 17.
-- A new MSBuild property (the Umbraco major) with a guard that version major equals Umbraco major at pack time.
-- `.github/workflows/ci.yml`: matrix over Umbraco 17 and 18, plus `dotnet test`.
-- `.github/workflows/publish.yml` (release workflow): derive the Umbraco major from the tag.
-- C# sources: a trial build against Umbraco 18 fails in two areas. Migrations (`MigrationBase` was removed) move to `AsyncMigrationBase`, which works on both majors. OpenAPI registration (Umbraco 18 dropped Swashbuckle for `Microsoft.AspNetCore.OpenApi`) needs separate code per major.
-- `generate-client`: the OpenAPI URL differs per major.
-- `Client/`: the `@umbraco-cms/backoffice` dev dependency (types only; runtime is external) must type-check for both majors.
-- `README.md` requirements section, `umbraco-marketplace.json` (stays at minimum Umbraco 17).
-- Out of scope: the stale csproj `<Description>` and the stale README tail section.
+- **`main`:**
+  - `Directory.Packages.props` takes its Umbraco range from a branch-fixed `UmbracoMajor` (18).
+  - A version-major guard at pack time.
+  - Migrations move to `AsyncMigrationBase`, because Umbraco 18 removed `MigrationBase`.
+  - OpenAPI registration moves from Swashbuckle to `Microsoft.AspNetCore.OpenApi`, because Umbraco 18 dropped Swashbuckle.
+  - `generate-client` points at the Umbraco 18 OpenAPI URL.
+  - `@umbraco-cms/backoffice` goes to `^18`, with `@hey-api/openapi-ts` `^0.99` (its peer dependency), and the stale `src/api` client is regenerated.
+- **`release/v17`:**
+  - Umbraco range `[17.0.0,18.0.0)` via `UmbracoMajor` 17.
+  - The same version guard.
+  - CI and publish triggers for that branch.
+  - README version table. No code changes.
+- **Both branches:** `.github/workflows/ci.yml` (adds `dotnet test`), `.github/workflows/publish.yml`, `README.md`, `CLAUDE.md`. `umbraco-marketplace.json` stays at minimum Umbraco 17.
+- **Out of scope:** the stale csproj `<Description>` and the stale README tail section.

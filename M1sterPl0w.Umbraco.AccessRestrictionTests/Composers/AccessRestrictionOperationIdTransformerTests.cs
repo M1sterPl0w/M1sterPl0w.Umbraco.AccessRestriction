@@ -1,4 +1,3 @@
-#if UMBRACO_18
 using System.Reflection;
 using M1sterPl0w.Umbraco.AccessRestriction.Composers;
 using M1sterPl0w.Umbraco.AccessRestriction.Controllers;
@@ -61,4 +60,3 @@ public class AccessRestrictionOperationIdTransformerTests
         Assert.Equal("GetUmbracoDefault", result);
     }
 }
-#endif

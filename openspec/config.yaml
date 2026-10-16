@@ -32,7 +32,7 @@ schema: spec-driven
 #         - Summarize the archive outcome before finishing
 
 context: |
-  Umbraco 17 + 18 / .NET 10 Razor Class Library (Umbraco major selected with -p:UmbracoMajor; package major equals Umbraco major) shipped as a NuGet package; there is no host app in this repo.
+  Umbraco 18 / .NET 10 Razor Class Library on main; Umbraco 17 hotfixes live on the release/v17 branch (package major equals Umbraco major, no conditional compilation) shipped as a NuGet package; there is no host app in this repo.
   Package versions live only in Directory.Packages.props, never in csproj files.
   Schema changes require a new migration chained onto AccessRestrictionMigrationPlan; never edit existing migration steps.
   A new condition type touches four places: RuleEngine/Conditions/, AccessRuleEngine.CreateCondition, ValidConditionTypes in the API controller, and the dashboard UI.

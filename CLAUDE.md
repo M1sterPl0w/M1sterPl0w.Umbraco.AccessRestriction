@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-An Umbraco 17 + 18 / .NET 10 NuGet package (Razor Class Library) that restricts site access with a rule engine (`Ip`, `Path`, `UserGroup` conditions), managed from a Lit backoffice dashboard. Auto-registers via an Umbraco `IComposer`; no host app lives in this repo.
+An Umbraco 18 / .NET 10 NuGet package (Umbraco 17 is maintained on the `release/v17` branch) (Razor Class Library) that restricts site access with a rule engine (`Ip`, `Path`, `UserGroup` conditions), managed from a Lit backoffice dashboard. Auto-registers via an Umbraco `IComposer`; no host app lives in this repo.
 
 ## Commands
 
@@ -15,20 +15,19 @@ The frontend must be built before `dotnet pack`, because Vite emits into `wwwroo
 npm ci
 npm run build          # tsc && vite build → ../wwwroot/App_Plugins/M1sterPl0w.Umbraco.AccessRestriction/
 npm run watch
-npm run generate-client     # regenerates src/api/* from a RUNNING Umbraco 18 site at https://localhost:5000 (hey-api)
-npm run generate-client:17  # same, against an Umbraco 17 site (Swashbuckle URL)
+npm run generate-client  # regenerates src/api/* from a RUNNING Umbraco 18 site at https://localhost:5000 (hey-api)
 
-# Backend, from repo root. -p:UmbracoMajor=17|18 selects the Umbraco major (default 18)
-dotnet build -p:UmbracoMajor=17
-dotnet test -p:UmbracoMajor=17
+# Backend, from repo root
+dotnet build
+dotnet test
 dotnet test --filter "FullyQualifiedName~IpConditionTests"           # one class
 dotnet test --filter "FullyQualifiedName~IpConditionTests.MethodName" # one test
-dotnet pack --configuration Release -p:UmbracoMajor=17 -p:Version=0.0.0-ci
+dotnet pack --configuration Release -p:Version=0.0.0-ci
 ```
 
-CI (`.github/workflows/ci.yml`) runs a matrix over Umbraco 17 and 18: frontend build → `dotnet build` → `dotnet test` → pack dry-run. Publishing to NuGet happens on a GitHub release. The version comes from the tag (`v18.1.2` → `18.1.2`), and the tag's major selects `UmbracoMajor`.
+CI (`.github/workflows/ci.yml`) runs on `main` and `release/v17`: frontend build → `dotnet build` → `dotnet test` → pack dry-run. Publishing to NuGet happens on a GitHub release. The version comes from the tag (`v18.1.2` → `18.1.2`), and the release's target branch decides the code.
 
-**Versioning.** The package major equals the Umbraco major (`17.x` → Umbraco 17, `18.x` → Umbraco 18). `Directory.Build.props` defines `UmbracoMajor`, and `Directory.Packages.props` derives the Umbraco range `[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)` from it. `Directory.Build.targets` rejects unsupported majors, and fails pack when the version major doesn't match (`0.x` is exempt). Code that differs per major uses `#if UMBRACO_18`. Currently only the OpenAPI registration differs: Umbraco 17 uses Swashbuckle and Umbraco 18 uses `Microsoft.AspNetCore.OpenApi`.
+**Versioning and branches.** The package major equals the Umbraco major. `main` is Umbraco 18 (`18.x`), and `release/v17` is Umbraco 17 (`17.x`, hotfixes only). `Directory.Build.props` fixes `UmbracoMajor` per branch, and `Directory.Packages.props` derives the Umbraco range `[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)` from it. `Directory.Build.targets` fails pack when the version major doesn't match (`0.x` is exempt). There's no conditional compilation: shared fixes land on `main` and are cherry-picked to `release/v17`, and 17-only fixes go to `release/v17` directly.
 
 Package versions are centrally managed in `Directory.Packages.props`. Don't put versions in the csproj files.
 
@@ -48,7 +47,7 @@ Package versions are centrally managed in `Directory.Packages.props`. Don't put 
 
 **Migrations.** `AccessRestrictionMigrationPlan` runs on `UmbracoApplicationStartedNotification`. To change the schema, add a new migration class (derive from `AsyncMigrationBase`, because `MigrationBase` is gone in Umbraco 18) and chain `.To<NewMigration>("x.y")` onto the plan. Never edit existing steps.
 
-**Backoffice API.** Controllers derive from `M1sterPl0wUmbracoAccessRestrictionApiControllerBase`: route `/umbraco/management/api/m1sterpl0wumbracoaccessrestriction/api/v1/...`, policy `SectionAccessContent`, and their own OpenAPI doc (`Constants.ApiName`). Operation IDs are set to the action name by `CustomOperationHandler` (Umbraco 17) or `AccessRestrictionOperationIdTransformer` (Umbraco 18). The two must stay in sync, because the operation IDs determine the generated TS method names.
+**Backoffice API.** Controllers derive from `M1sterPl0wUmbracoAccessRestrictionApiControllerBase`: route `/umbraco/m1sterpl0wumbracoaccessrestriction/api/v1/...`, policy `SectionAccessContent`, and their own OpenAPI doc (`Constants.ApiName`). The OpenAPI doc is registered with Umbraco 18's `AddBackOfficeOpenApiDocument` (`Microsoft.AspNetCore.OpenApi`, not Swashbuckle). `AccessRestrictionOperationIdTransformer` sets operation IDs to the action name, which determines the generated TS method names. `release/v17` does the same with the Swashbuckle `CustomOperationHandler`, so the IDs must stay in sync.
 
 **Frontend** (`Client/`). It is a single dashboard web component (`access-restriction-dashboard.element.ts`) registered in the Content section via `Client/public/umbraco-package.json`. Everything in `src/api/*.gen.ts` is generated by `npm run generate-client`, so don't hand-edit it; `src/hey-api.ts` configures the runtime client. `@umbraco*` imports are externals and are provided by the backoffice at runtime.
 
