@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/v17]
   pull_request:
-    branches: [main]
+    branches: [main, release/v17]
 
 jobs:
   build:
@@ -42,6 +42,9 @@ jobs:
 
       - name: Build
         run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build
 
       - name: Pack (dry-run)
         run: dotnet pack --configuration Release --no-build -p:Version=0.0.0-ci
