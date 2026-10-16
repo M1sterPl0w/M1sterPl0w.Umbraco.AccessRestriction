@@ -21,9 +21,21 @@ An Umbraco package that controls access to your site through a flexible **rule e
 
 ## Requirements
 
-- Umbraco 17+
+- Umbraco 17 or 18
 - .NET 10
 - Node LTS 20.17.0+ *(for building the frontend)*
+
+### Versioning
+
+The package major version matches the Umbraco major version it supports. Install the package major that equals your Umbraco major.
+
+| Package version | Umbraco version |
+|---|---|
+| `18.x` | Umbraco 18 |
+| `17.x` | Umbraco 17 |
+| `2.x` | Umbraco 17 (legacy line, superseded by `17.x`) |
+
+Minor and patch numbers belong to this package and do not follow Umbraco's minor and patch releases. For example, `18.0.1` is a bug-fix release of this package for any Umbraco 18.x site.
 
 ---
 
@@ -185,6 +197,22 @@ For development with file watching:
 ```bash
 npm run watch
 ```
+
+---
+
+## Building the package
+
+One source tree builds against either Umbraco major. Select the major with `-p:UmbracoMajor` (default `18`):
+
+```bash
+dotnet build -p:UmbracoMajor=17
+dotnet test -p:UmbracoMajor=17
+dotnet pack -c Release -p:UmbracoMajor=17 -p:Version=17.0.0
+```
+
+The package version major must equal `UmbracoMajor`, otherwise `dotnet pack` fails. Releases derive both from the tag: `v17.0.0` builds against Umbraco 17 and `v18.0.0` builds against Umbraco 18.
+
+To regenerate the API client, run a site and use `npm run generate-client` (Umbraco 18, `/umbraco/openapi/m1sterpl0wumbracoaccessrestriction.json`) or `npm run generate-client:17` (Umbraco 17, `/umbraco/swagger/m1sterpl0wumbracoaccessrestriction/swagger.json`).
 
 ---
 

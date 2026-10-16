@@ -1,0 +1,13 @@
+<Project>
+  <!--
+    Selects the Umbraco major this build targets. Umbraco 17 and 18 both target net10.0,
+    so the major is chosen with -p:UmbracoMajor=17|18 instead of a target framework.
+    The package version major must match it (see Directory.Build.targets).
+  -->
+  <PropertyGroup>
+    <UmbracoMajor Condition="'$(UmbracoMajor)' == ''">18</UmbracoMajor>
+    <SupportedUmbracoMajors>17;18</SupportedUmbracoMajors>
+    <UmbracoNextMajor>$([MSBuild]::Add($(UmbracoMajor), 1))</UmbracoNextMajor>
+    <DefineConstants>$(DefineConstants);UMBRACO_$(UmbracoMajor)</DefineConstants>
+  </PropertyGroup>
+</Project>

@@ -4,13 +4,13 @@ using Umbraco.Cms.Infrastructure.Migrations;
 
 namespace M1sterPl0w.Umbraco.AccessRestriction.Migrations
 {
-    public class InitialMigration : MigrationBase
+    public class InitialMigration : AsyncMigrationBase
     {
         public InitialMigration(IMigrationContext context) : base(context)
         {
         }
 
-        protected override void Migrate()
+        protected override Task MigrateAsync()
         {
             // Drop legacy V1 tables if they exist (safe upgrade path)
             if (TableExists("AccessRestrictionIpAddresses"))
@@ -65,6 +65,8 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Migrations
                     .WithColumn("Values").AsString(int.MaxValue).NotNullable().WithDefaultValue("[]")
                     .Do();
             }
+
+            return Task.CompletedTask;
         }
     }
 }

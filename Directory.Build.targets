@@ -1,0 +1,15 @@
+<Project>
+  <Target Name="ValidateUmbracoMajor" BeforeTargets="_GenerateRestoreProjectSpec;CollectPackageReferences;BeforeBuild">
+    <Error Condition="!$([System.String]::Copy(';$(SupportedUmbracoMajors);').Contains(';$(UmbracoMajor);'))"
+           Text="UmbracoMajor '$(UmbracoMajor)' is not supported. Supported Umbraco majors: $(SupportedUmbracoMajors)." />
+  </Target>
+
+  <!-- Package major must equal the Umbraco major. 0.x versions (CI dry-run) are exempt. -->
+  <Target Name="ValidatePackageVersionMajor" BeforeTargets="GenerateNuspec" Condition="'$(IsPackable)' != 'false'">
+    <PropertyGroup>
+      <_PackageVersionMajor>$(PackageVersion.Split('.')[0])</_PackageVersionMajor>
+    </PropertyGroup>
+    <Error Condition="'$(_PackageVersionMajor)' != '0' And '$(_PackageVersionMajor)' != '$(UmbracoMajor)'"
+           Text="Package version $(PackageVersion) has major $(_PackageVersionMajor), but UmbracoMajor is $(UmbracoMajor). The package major must match the Umbraco major." />
+  </Target>
+</Project>

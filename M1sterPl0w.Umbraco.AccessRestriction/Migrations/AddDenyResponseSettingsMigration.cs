@@ -3,13 +3,13 @@ using Umbraco.Cms.Infrastructure.Migrations;
 
 namespace M1sterPl0w.Umbraco.AccessRestriction.Migrations
 {
-    public class AddDenyResponseSettingsMigration : MigrationBase
+    public class AddDenyResponseSettingsMigration : AsyncMigrationBase
     {
         public AddDenyResponseSettingsMigration(IMigrationContext context) : base(context)
         {
         }
 
-        protected override void Migrate()
+        protected override Task MigrateAsync()
         {
             var rows = Database.Fetch<AccessRestrictionSettingsSchema>();
 
@@ -21,6 +21,8 @@ namespace M1sterPl0w.Umbraco.AccessRestriction.Migrations
                     Value = "403"
                 });
             }
+
+            return Task.CompletedTask;
         }
     }
 }
