@@ -4,13 +4,13 @@
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Umbraco.Cms" Version="[17.0.0,17.999)" />
-    <PackageVersion Include="Umbraco.Cms.DevelopmentMode.Backoffice" Version="[17.0.0,17.999)" />
-    <PackageVersion Include="Umbraco.Cms.Api.Common" Version="[17.0.0,17.999)" />
-    <PackageVersion Include="Umbraco.Cms.Api.Management" Version="[17.0.0,17.999)" />
-    <PackageVersion Include="Umbraco.Cms.Infrastructure" Version="[17.0.0,17.999)" />
-    <PackageVersion Include="Umbraco.Cms.Web.Common" Version="[17.0.0,17.999)" />
-    <PackageVersion Include="Umbraco.Cms.Web.Website" Version="[17.0.0,17.999)" />
+    <PackageVersion Include="Umbraco.Cms" Version="[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)" />
+    <PackageVersion Include="Umbraco.Cms.DevelopmentMode.Backoffice" Version="[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)" />
+    <PackageVersion Include="Umbraco.Cms.Api.Common" Version="[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)" />
+    <PackageVersion Include="Umbraco.Cms.Api.Management" Version="[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)" />
+    <PackageVersion Include="Umbraco.Cms.Infrastructure" Version="[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)" />
+    <PackageVersion Include="Umbraco.Cms.Web.Common" Version="[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)" />
+    <PackageVersion Include="Umbraco.Cms.Web.Website" Version="[$(UmbracoMajor).0.0,$(UmbracoNextMajor).0.0)" />
     <PackageVersion Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" />
     <!-- Test packages -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />

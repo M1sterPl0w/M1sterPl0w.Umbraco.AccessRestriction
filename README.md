@@ -21,9 +21,21 @@ An Umbraco package that controls access to your site through a flexible **rule e
 
 ## Requirements
 
-- Umbraco 17+
+- Umbraco 17 or 18
 - .NET 10
 - Node LTS 20.17.0+ *(for building the frontend)*
+
+### Versioning
+
+The package major version matches the Umbraco major version it supports. Install the package major that equals your Umbraco major.
+
+| Package version | Umbraco version | Branch |
+|---|---|---|
+| `18.x` | Umbraco 18 | `main` |
+| `17.x` | Umbraco 17 | `release/v17` (hotfixes only) |
+| `2.x` | Umbraco 17 (legacy line, superseded by `17.x`) | — |
+
+Minor and patch numbers belong to this package and do not follow Umbraco's minor and patch releases. For example, `18.0.1` is a bug-fix release of this package for any Umbraco 18.x site.
 
 ---
 
@@ -185,6 +197,28 @@ For development with file watching:
 ```bash
 npm run watch
 ```
+
+---
+
+## Building the package
+
+Each branch builds against one Umbraco major, set by `UmbracoMajor` in `Directory.Build.props` (`18` on `main`, `17` on `release/v17`):
+
+```bash
+dotnet build
+dotnet test
+dotnet pack -c Release -p:Version=18.0.0
+```
+
+The package version major must equal `UmbracoMajor`, otherwise `dotnet pack` fails. Publish `v18.x.y` releases from `main` and `v17.x.y` releases from `release/v17`. A tag on the wrong branch fails the release before anything is pushed.
+
+To regenerate the API client, run an Umbraco 18 site on `https://localhost:5000` and use `npm run generate-client` (reads `/umbraco/openapi/m1sterpl0wumbracoaccessrestriction.json`).
+
+### Hotfixes
+
+- A fix that applies to both majors is merged to `main` first, then cherry-picked to `release/v17`, and released as both `18.x.y` and `17.x.y`.
+- A fix that only affects Umbraco 17 is merged to `release/v17` directly and released as `17.x.y`.
+- New migrations derive from `AsyncMigrationBase`, so they compile on both branches.
 
 ---
 
